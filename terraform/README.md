@@ -1,4 +1,4 @@
-# Infraestructura — microservicios de franquicias (v2, capa gratuita)
+# Infraestructura — microservicios de franquicias (v3 reactiva, capa gratuita)
 
 Pensada para costar 0: una EC2
 `t3.micro` ejecuta los tres servicios y ActiveMQ con docker compose, y cada servicio
@@ -64,8 +64,8 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 
 docker compose build
 for s in franquicia sucursal producto; do
-  docker tag microservicios-$s-service $REGISTRO/franchise-free/$s-service:2.0.0
-  docker push $REGISTRO/franchise-free/$s-service:2.0.0
+  docker tag microservicios-$s-service $REGISTRO/franchise-free/$s-service:3.0.0
+  docker push $REGISTRO/franchise-free/$s-service:3.0.0
 done
 ```
 
