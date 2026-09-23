@@ -6,8 +6,9 @@ import com.levir.hernandez.franquicia.application.port.in.franquicia.*;
 import com.levir.hernandez.franquicia.application.port.out.FranquiciaRepositoryPort;
 import com.levir.hernandez.franquicia.domain.model.Franquicia;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
 @ObservableUseCase
@@ -19,29 +20,34 @@ public class FranquiciaService implements
     private final FranquiciaRepositoryPort franquiciaRepositoryPort;
 
     @Override
-    public Franquicia agregarFranquicia(String nombre)
+    public Mono<Franquicia> agregarFranquicia(String nombre)
     {
-        return franquiciaRepositoryPort.guardarFranquicia(new Franquicia(null, nombre));
+        return Mono.fromCallable(() -> new Franquicia(null, nombre))
+                .flatMap(franquiciaRepositoryPort::guardarFranquicia);
     }
 
     @Override
-    public Franquicia obtenerFranquicia(UUID franquiciaId)
+    public Mono<Franquicia> obtenerFranquicia(UUID franquiciaId)
     {
         return franquiciaRepositoryPort.obtenerFranquiciaPorId(franquiciaId)
-                .orElseThrow(() -> new FranquiciaNoEncontradaException(franquiciaId));
+                .switchIfEmpty(Mono.error(() -> new FranquiciaNoEncontradaException(franquiciaId)));
     }
 
     @Override
-    public List<Franquicia> obtenerFranquicias()
+    public Flux<Franquicia> obtenerFranquicias()
     {
         return franquiciaRepositoryPort.obtenerTodasLasFranquicias();
     }
 
     @Override
-    public Franquicia renombrarFranquicia(UUID franquiciaId, String nombre)
+    public Mono<Franquicia> renombrarFranquicia(UUID franquiciaId, String nombre)
     {
-        Franquicia franquicia = obtenerFranquicia(franquiciaId);
-        franquicia.renombrar(nombre);
-        return franquiciaRepositoryPort.guardarFranquicia(franquicia);
+        return obtenerFranquicia(franquiciaId)
+                .map(franquicia ->
+                {
+                    franquicia.renombrar(nombre);
+                    return franquicia;
+                })
+                .flatMap(franquiciaRepositoryPort::guardarFranquicia);
     }
 }

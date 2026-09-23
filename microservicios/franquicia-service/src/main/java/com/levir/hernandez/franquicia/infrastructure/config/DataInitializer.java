@@ -9,6 +9,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -38,13 +39,13 @@ public class DataInitializer
         if (path.isBlank()) return;
 
         // Solo se insertan los ids que aun no existen: no duplica ni sobrescribe cambios hechos por la API
-        List<FranquiciaJson> nuevos = leerArchivo().stream()
-                .filter(json -> franquiciaRepository.obtenerFranquiciaPorId(json.id()).isEmpty())
-                .toList();
-
-        nuevos.forEach(json -> franquiciaRepository.guardarFranquicia(new Franquicia(json.id(), json.nombre())));
-
-        log.info("Datos iniciales cargados desde {}: {} franquicias nuevas", path, nuevos.size());
+        Flux.fromIterable(leerArchivo())
+                .filterWhen(json -> franquiciaRepository.obtenerFranquiciaPorId(json.id()).hasElement().map(existe -> !existe))
+                .concatMap(json -> franquiciaRepository.guardarFranquicia(new Franquicia(json.id(), json.nombre())))
+                .count()
+                .subscribe(
+                        nuevos -> log.info("Datos iniciales cargados desde {}: {} franquicias nuevas", path, nuevos),
+                        error -> log.warn("No se pudieron cargar los datos iniciales de {}: {}", path, error.toString()));
     }
 
     private List<FranquiciaJson> leerArchivo()

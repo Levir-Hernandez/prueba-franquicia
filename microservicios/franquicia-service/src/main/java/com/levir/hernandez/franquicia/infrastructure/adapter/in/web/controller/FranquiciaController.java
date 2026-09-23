@@ -23,6 +23,7 @@ import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -58,10 +59,11 @@ public class FranquiciaController
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<EntityModel<FranquiciaResponse>> agregar(@Valid @RequestBody NombreRecursoRequest request)
+    public Mono<ResponseEntity<EntityModel<FranquiciaResponse>>> agregar(@Valid @RequestBody NombreRecursoRequest request)
     {
-        EntityModel<FranquiciaResponse> body = assembler.toModel(agregarFranquicia.agregarFranquicia(request.nombre()));
-        return ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body);
+        return agregarFranquicia.agregarFranquicia(request.nombre())
+                .flatMap(assembler::toModel)
+                .map(body -> ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body));
     }
 
     // ObtenerFranquiciasUseCase
@@ -77,7 +79,7 @@ public class FranquiciaController
     })
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    public CollectionModel<EntityModel<FranquiciaResponse>> listar()
+    public Mono<CollectionModel<EntityModel<FranquiciaResponse>>> listar()
     {
         return assembler.toCollectionModel(obtenerFranquicias.obtenerFranquicias());
     }
@@ -97,11 +99,11 @@ public class FranquiciaController
     })
     @GetMapping("/{franquiciaId}")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<FranquiciaResponse> obtener(
+    public Mono<EntityModel<FranquiciaResponse>> obtener(
             @Parameter(description = "Id de la franquicia", required = true)
             @PathVariable UUID franquiciaId)
     {
-        return assembler.toModel(obtenerFranquicia.obtenerFranquicia(franquiciaId));
+        return obtenerFranquicia.obtenerFranquicia(franquiciaId).flatMap(assembler::toModel);
     }
 
     // RenombrarFranquiciaUseCase
@@ -125,12 +127,12 @@ public class FranquiciaController
     })
     @PatchMapping("/{franquiciaId}/nombre")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<FranquiciaResponse> renombrar(
+    public Mono<EntityModel<FranquiciaResponse>> renombrar(
             @Parameter(description = "Id de la franquicia", required = true)
             @PathVariable UUID franquiciaId,
 
             @Valid @RequestBody NombreRecursoRequest request)
     {
-        return assembler.toModel(renombrarFranquicia.renombrarFranquicia(franquiciaId, request.nombre()));
+        return renombrarFranquicia.renombrarFranquicia(franquiciaId, request.nombre()).flatMap(assembler::toModel);
     }
 }

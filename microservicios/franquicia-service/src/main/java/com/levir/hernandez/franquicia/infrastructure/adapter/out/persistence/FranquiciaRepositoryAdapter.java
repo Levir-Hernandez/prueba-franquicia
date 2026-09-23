@@ -6,8 +6,9 @@ import com.levir.hernandez.franquicia.infrastructure.adapter.out.persistence.doc
 import com.levir.hernandez.franquicia.infrastructure.adapter.out.persistence.repository.FranquiciaMongoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,27 +19,27 @@ public class FranquiciaRepositoryAdapter implements FranquiciaRepositoryPort
     private final FranquiciaMongoRepository franquiciaRepository;
 
     @Override
-    public Franquicia guardarFranquicia(Franquicia franquicia)
+    public Mono<Franquicia> guardarFranquicia(Franquicia franquicia)
     {
         // Mongo no genera UUIDs: si la franquicia es nueva se le asigna uno aqui
         UUID id = Optional.ofNullable(franquicia.getId()).orElseGet(UUID::randomUUID);
 
-        return toDomain(franquiciaRepository.save(new FranquiciaDocument(id.toString(), franquicia.getNombre())));
+        return franquiciaRepository.save(new FranquiciaDocument(id.toString(), franquicia.getNombre()))
+                .map(FranquiciaRepositoryAdapter::toDomain);
     }
 
     @Override
-    public Optional<Franquicia> obtenerFranquiciaPorId(UUID franquiciaId)
+    public Mono<Franquicia> obtenerFranquiciaPorId(UUID franquiciaId)
     {
         return franquiciaRepository.findById(franquiciaId.toString())
                 .map(FranquiciaRepositoryAdapter::toDomain);
     }
 
     @Override
-    public List<Franquicia> obtenerTodasLasFranquicias()
+    public Flux<Franquicia> obtenerTodasLasFranquicias()
     {
-        return franquiciaRepository.findAll().stream()
-                .map(FranquiciaRepositoryAdapter::toDomain)
-                .toList();
+        return franquiciaRepository.findAll()
+                .map(FranquiciaRepositoryAdapter::toDomain);
     }
 
     private static Franquicia toDomain(FranquiciaDocument document)

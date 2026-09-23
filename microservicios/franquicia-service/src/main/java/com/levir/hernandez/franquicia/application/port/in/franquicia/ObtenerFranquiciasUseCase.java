@@ -1,10 +1,9 @@
 package com.levir.hernandez.franquicia.application.port.in.franquicia;
 
 import com.levir.hernandez.franquicia.domain.model.Franquicia;
-
-import java.util.List;
+import reactor.core.publisher.Flux;
 
 public interface ObtenerFranquiciasUseCase
 {
-    List<Franquicia> obtenerFranquicias();
+    Flux<Franquicia> obtenerFranquicias();
 }
