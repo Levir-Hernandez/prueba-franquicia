@@ -1,30 +1,52 @@
 #!/bin/bash
 set -euo pipefail
 
-dnf update -y
-dnf install -y docker jq
+# Arranque de la instancia: instala Docker, prepara la memoria y levanta los tres
+# servicios y ActiveMQ con docker compose. Las URIs de MongoDB se leen de Parameter
+# Store al arrancar: no se escriben en la plantilla.
+
+# 1 GB de RAM es justo para tres JVM y el broker: el swap evita que un pico tumbe un servicio.
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+
+dnf install -y docker
 systemctl enable --now docker
 
-SECRET=$(aws secretsmanager get-secret-value \
-  --secret-id "${db_secret_id}" \
-  --region "${aws_region}" \
-  --query SecretString \
-  --output text)
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL "https://github.com/docker/compose/releases/download/v2.39.2/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-DB_HOST=$(echo "$SECRET" | jq -r .host)
-DB_PORT=$(echo "$SECRET" | jq -r .port)
-DB_NAME=$(echo "$SECRET" | jq -r .dbname)
-DB_USER=$(echo "$SECRET" | jq -r .username)
-DB_PASSWORD=$(echo "$SECRET" | jq -r .password)
+mkdir -p /opt/franquicia
+cd /opt/franquicia
 
-aws ecr get-login-password --region "${aws_region}" \
-  | docker login --username AWS --password-stdin "${api_registry}"
+cat > docker-compose.yml <<'COMPOSE'
+${compose}
+COMPOSE
 
-docker run -d \
-  --name franquicia-api \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -e DB_URL="jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME" \
-  -e DB_USER="$DB_USER" \
-  -e DB_PASSWORD="$DB_PASSWORD" \
-  "${api_image}"
+leer_parametro() {
+  aws ssm get-parameter --region "${aws_region}" --name "$1" --with-decryption \
+    --query Parameter.Value --output text
+}
+
+umask 077
+cat > .env <<ENV
+MONGO_URI_FRANQUICIA=$(leer_parametro "${parametros}/franquicia/mongo-uri")
+MONGO_URI_SUCURSAL=$(leer_parametro "${parametros}/sucursal/mongo-uri")
+MONGO_URI_PRODUCTO=$(leer_parametro "${parametros}/producto/mongo-uri")
+ENV
+
+# Las imagenes pueden publicarse despues de crear la instancia: se reintenta hasta 1 hora.
+for intento in $(seq 1 60); do
+  aws ecr get-login-password --region "${aws_region}" \
+    | docker login --username AWS --password-stdin "${registro}" \
+    && docker compose pull \
+    && break
+  echo "Imagenes aun no disponibles (intento $intento), reintentando en 60 s"
+  sleep 60
+done
+
+docker compose up -d
