@@ -10,13 +10,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -41,61 +40,68 @@ class ProductoServiceTest
     @DisplayName("Deberia obtener un producto existente por su id")
     void obtieneProductoExistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.of(productoExistente()));
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.just(productoExistente()));
 
-        assertThat(service.obtenerProducto(productoId).getNombre()).isEqualTo("Hamburguesa clasica");
+        StepVerifier.create(service.obtenerProducto(productoId).map(Producto::getNombre))
+                .expectNext("Hamburguesa clasica")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion al obtener un producto que no existe")
+    @DisplayName("Deberia emitir error al obtener un producto que no existe")
     void noObtieneProductoInexistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.empty());
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.obtenerProducto(productoId))
-                .isInstanceOf(ProductoNoEncontradoException.class);
+        StepVerifier.create(service.obtenerProducto(productoId))
+                .expectError(ProductoNoEncontradoException.class)
+                .verify();
     }
 
     @Test
     @DisplayName("Deberia obtener los productos de una sucursal que tiene productos")
     void obtieneProductosDeSucursal()
     {
-        when(productoRepository.obtenerProductosPorIdDeSucursal(sucursalId)).thenReturn(List.of(
+        when(productoRepository.obtenerProductosPorIdDeSucursal(sucursalId)).thenReturn(Flux.just(
                 new Producto(UUID.randomUUID(), "Hamburguesa clasica", 10, sucursalId),
                 new Producto(UUID.randomUUID(), "Papas fritas", 30, sucursalId)));
 
-        assertThat(service.obtenerProductos(sucursalId)).extracting(Producto::getNombre)
-                .containsExactlyInAnyOrder("Hamburguesa clasica", "Papas fritas");
+        StepVerifier.create(service.obtenerProductos(sucursalId).map(Producto::getNombre))
+                .expectNext("Hamburguesa clasica", "Papas fritas")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia devolver una lista vacia para una sucursal sin productos o que no existe")
+    @DisplayName("Deberia terminar vacio para una sucursal sin productos o que no existe")
     void obtieneListaVaciaSinProductos()
     {
-        when(productoRepository.obtenerProductosPorIdDeSucursal(sucursalId)).thenReturn(List.of());
+        when(productoRepository.obtenerProductosPorIdDeSucursal(sucursalId)).thenReturn(Flux.empty());
 
-        assertThat(service.obtenerProductos(sucursalId)).isEmpty();
+        StepVerifier.create(service.obtenerProductos(sucursalId)).verifyComplete();
     }
 
     @Test
     @DisplayName("Deberia eliminar un producto que existe")
     void eliminaProductoExistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.of(productoExistente()));
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.just(productoExistente()));
+        when(productoRepository.eliminarProductoPorId(productoId)).thenReturn(Mono.empty());
 
-        service.eliminarProducto(productoId);
+        StepVerifier.create(service.eliminarProducto(productoId)).verifyComplete();
 
         verify(productoRepository).eliminarProductoPorId(productoId);
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no eliminar un producto que no existe")
+    @DisplayName("Deberia emitir error y no eliminar un producto que no existe")
     void noEliminaProductoInexistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.empty());
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.eliminarProducto(productoId))
-                .isInstanceOf(ProductoNoEncontradoException.class);
+        StepVerifier.create(service.eliminarProducto(productoId))
+                .expectError(ProductoNoEncontradoException.class)
+                .verify();
+
         verify(productoRepository, never()).eliminarProductoPorId(any());
     }
 
@@ -103,31 +109,37 @@ class ProductoServiceTest
     @DisplayName("Deberia modificar el stock de un producto existente")
     void modificaStockProducto()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.of(productoExistente()));
-        when(productoRepository.guardarProducto(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.just(productoExistente()));
+        when(productoRepository.guardarProducto(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        assertThat(service.modificarStockProducto(productoId, 25).getStock()).isEqualTo(25);
+        StepVerifier.create(service.modificarStockProducto(productoId, 25).map(Producto::getStock))
+                .expectNext(25)
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al modificar el stock a un valor negativo")
+    @DisplayName("Deberia emitir error y no guardar al modificar el stock a un valor negativo")
     void noModificaStockNegativo()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.of(productoExistente()));
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.just(productoExistente()));
 
-        assertThatThrownBy(() -> service.modificarStockProducto(productoId, -1))
-                .isInstanceOf(ProductoInvalidoException.class);
+        StepVerifier.create(service.modificarStockProducto(productoId, -1))
+                .expectError(ProductoInvalidoException.class)
+                .verify();
+
         verify(productoRepository, never()).guardarProducto(any());
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al modificar el stock de un producto que no existe")
+    @DisplayName("Deberia emitir error y no guardar al modificar el stock de un producto que no existe")
     void noModificaStockProductoInexistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.empty());
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.modificarStockProducto(productoId, 25))
-                .isInstanceOf(ProductoNoEncontradoException.class);
+        StepVerifier.create(service.modificarStockProducto(productoId, 25))
+                .expectError(ProductoNoEncontradoException.class)
+                .verify();
+
         verify(productoRepository, never()).guardarProducto(any());
     }
 
@@ -135,21 +147,24 @@ class ProductoServiceTest
     @DisplayName("Deberia renombrar un producto existente")
     void renombraProducto()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.of(productoExistente()));
-        when(productoRepository.guardarProducto(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.just(productoExistente()));
+        when(productoRepository.guardarProducto(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        assertThat(service.renombrarProducto(productoId, "Hamburguesa doble").getNombre())
-                .isEqualTo("Hamburguesa doble");
+        StepVerifier.create(service.renombrarProducto(productoId, "Hamburguesa doble").map(Producto::getNombre))
+                .expectNext("Hamburguesa doble")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al renombrar un producto que no existe")
+    @DisplayName("Deberia emitir error y no guardar al renombrar un producto que no existe")
     void noRenombraProductoInexistente()
     {
-        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Optional.empty());
+        when(productoRepository.obtenerProductoPorId(productoId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.renombrarProducto(productoId, "Hamburguesa doble"))
-                .isInstanceOf(ProductoNoEncontradoException.class);
+        StepVerifier.create(service.renombrarProducto(productoId, "Hamburguesa doble"))
+                .expectError(ProductoNoEncontradoException.class)
+                .verify();
+
         verify(productoRepository, never()).guardarProducto(any());
     }
 }

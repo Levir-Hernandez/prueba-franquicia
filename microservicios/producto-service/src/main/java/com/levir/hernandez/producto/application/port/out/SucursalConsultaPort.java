@@ -1,6 +1,8 @@
 package com.levir.hernandez.producto.application.port.out;
 
-import java.util.List;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
 import java.util.UUID;
 
 /**
@@ -8,9 +10,9 @@ import java.util.UUID;
  */
 public interface SucursalConsultaPort
 {
-    /** Lanza ServicioNoDisponibleException si no es posible obtener la respuesta. */
-    boolean existeSucursal(UUID sucursalId);
+    /** Emite ServicioNoDisponibleException si no es posible obtener la respuesta. */
+    Mono<Boolean> existeSucursal(UUID sucursalId);
 
-    /** Devuelve una lista vacia si no es posible obtener la respuesta. */
-    List<SucursalResumen> obtenerSucursalesDeFranquicia(UUID franquiciaId);
+    /** Termina vacio si no es posible obtener la respuesta. */
+    Flux<SucursalResumen> obtenerSucursalesDeFranquicia(UUID franquiciaId);
 }

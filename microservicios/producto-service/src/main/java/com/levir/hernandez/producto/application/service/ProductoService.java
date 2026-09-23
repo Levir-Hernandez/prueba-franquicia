@@ -6,8 +6,9 @@ import com.levir.hernandez.producto.application.port.in.producto.*;
 import com.levir.hernandez.producto.application.port.out.ProductoRepositoryPort;
 import com.levir.hernandez.producto.domain.model.Producto;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
 @ObservableUseCase
@@ -19,38 +20,46 @@ public class ProductoService implements
     private final ProductoRepositoryPort productoRepositoryPort;
 
     @Override
-    public void eliminarProducto(UUID productoId)
+    public Mono<Void> eliminarProducto(UUID productoId)
     {
-        obtenerProducto(productoId);
-        productoRepositoryPort.eliminarProductoPorId(productoId);
+        return obtenerProducto(productoId)
+                .flatMap(producto -> productoRepositoryPort.eliminarProductoPorId(productoId));
     }
 
     @Override
-    public Producto modificarStockProducto(UUID productoId, Integer stock)
+    public Mono<Producto> modificarStockProducto(UUID productoId, Integer stock)
     {
-        Producto producto = obtenerProducto(productoId);
-        producto.modificarStock(stock);
-        return productoRepositoryPort.guardarProducto(producto);
+        return obtenerProducto(productoId)
+                .map(producto ->
+                {
+                    producto.modificarStock(stock);
+                    return producto;
+                })
+                .flatMap(productoRepositoryPort::guardarProducto);
     }
 
     @Override
-    public Producto obtenerProducto(UUID productoId)
+    public Mono<Producto> obtenerProducto(UUID productoId)
     {
         return productoRepositoryPort.obtenerProductoPorId(productoId)
-                .orElseThrow(() -> new ProductoNoEncontradoException(productoId));
+                .switchIfEmpty(Mono.error(() -> new ProductoNoEncontradoException(productoId)));
     }
 
     @Override
-    public List<Producto> obtenerProductos(UUID sucursalId)
+    public Flux<Producto> obtenerProductos(UUID sucursalId)
     {
         return productoRepositoryPort.obtenerProductosPorIdDeSucursal(sucursalId);
     }
 
     @Override
-    public Producto renombrarProducto(UUID productoId, String nombre)
+    public Mono<Producto> renombrarProducto(UUID productoId, String nombre)
     {
-        Producto producto = obtenerProducto(productoId);
-        producto.renombrar(nombre);
-        return productoRepositoryPort.guardarProducto(producto);
+        return obtenerProducto(productoId)
+                .map(producto ->
+                {
+                    producto.renombrar(nombre);
+                    return producto;
+                })
+                .flatMap(productoRepositoryPort::guardarProducto);
     }
 }
