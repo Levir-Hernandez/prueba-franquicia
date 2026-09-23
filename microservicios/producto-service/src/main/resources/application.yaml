@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: producto-service
+  mongodb:
+    uri: ${MONGO_URI:mongodb://localhost:27017/productos}
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/productos}
+      auto-index-creation: true
+  activemq:
+    broker-url: ${ACTIVEMQ_URL:tcp://localhost:61616}
+    user: ${ACTIVEMQ_USER:admin}
+    password: ${ACTIVEMQ_PASSWORD:admin}
+  jms:
+    template:
+      # Tiempo maximo que se espera la respuesta de otro servicio (request-reply)
+      receive-timeout: ${CONSULTA_TIMEOUT:3s}
+      # Las preguntas caducan con el mismo tiempo: si nadie las atendio a tiempo el broker las descarta
+      qos-enabled: true
+      time-to-live: ${CONSULTA_TIMEOUT:3s}
+      delivery-mode: non-persistent
+
+server:
+  port: ${SERVER_PORT:8083}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  # Contrato de colas de ActiveMQ entre microservicios
+  mensajeria:
+    colas:
+      # pregunta a sucursal-service: id -> "true" | "false"
+      sucursal-existe: sucursal.consulta.existe
+      # pregunta a sucursal-service: id de franquicia -> [{"id", "nombre"}]
+      sucursales-por-franquicia: sucursal.consulta.por-franquicia
+  # Datos de ejemplo (ids fijos compartidos entre servicios). Vacio para no cargar nada
+  datos-iniciales:
+    path: ${DATOS_INICIALES_PATH:data/productos.json}
+  servicios:
+    franquicia-url: ${FRANQUICIA_URL:http://localhost:8081}
+    sucursal-url: ${SUCURSAL_URL:http://localhost:8082}
+    producto-url: ${PRODUCTO_URL:http://localhost:8083}
+
+# Circuit breaker de las consultas a sucursal-service
+resilience4j:
+  circuitbreaker:
+    instances:
+      sucursal:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,circuitbreakers
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  pattern:
+    correlation: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %+5level ${PID} --- [${spring.application.name}] [%+15.15thread]  [%6.6X{traceId}] %-40.40logger{39} : %msg%n"
