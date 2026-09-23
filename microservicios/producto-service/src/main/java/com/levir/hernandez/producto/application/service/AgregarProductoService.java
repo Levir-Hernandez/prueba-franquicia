@@ -7,6 +7,7 @@ import com.levir.hernandez.producto.application.port.out.ProductoRepositoryPort;
 import com.levir.hernandez.producto.application.port.out.SucursalConsultaPort;
 import com.levir.hernandez.producto.domain.model.Producto;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -21,16 +22,13 @@ public class AgregarProductoService implements AgregarProductoUseCase
     private final SucursalConsultaPort sucursalConsultaPort;
 
     @Override
-    public Producto agregarProducto(UUID sucursalId, String nombre, Integer stock)
+    public Mono<Producto> agregarProducto(UUID sucursalId, String nombre, Integer stock)
     {
         // Se validan las reglas del dominio antes de consultar a otro servicio
-        Producto producto = new Producto(nombre, stock, sucursalId);
-
-        if (!sucursalConsultaPort.existeSucursal(sucursalId))
-        {
-            throw new SucursalNoEncontradaException(sucursalId);
-        }
-
-        return productoRepositoryPort.guardarProducto(producto);
+        return Mono.fromCallable(() -> new Producto(nombre, stock, sucursalId))
+                .flatMap(producto -> sucursalConsultaPort.existeSucursal(sucursalId)
+                        .filter(Boolean::booleanValue)
+                        .switchIfEmpty(Mono.error(() -> new SucursalNoEncontradaException(sucursalId)))
+                        .then(Mono.defer(() -> productoRepositoryPort.guardarProducto(producto))));
     }
 }

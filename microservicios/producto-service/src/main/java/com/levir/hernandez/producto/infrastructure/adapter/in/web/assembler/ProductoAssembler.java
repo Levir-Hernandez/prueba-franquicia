@@ -8,17 +8,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
-import org.springframework.hateoas.server.RepresentationModelAssembler;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+import static org.springframework.hateoas.server.reactive.WebFluxLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.reactive.WebFluxLinkBuilder.methodOn;
 
+/**
+ * En WebFlux los enlaces se construyen de forma asincrona a partir de la peticion en curso
+ */
 @Component
-public class ProductoAssembler implements RepresentationModelAssembler<Producto, EntityModel<ProductoResponse>>
+public class ProductoAssembler
 {
     // Las sucursales viven en otro microservicio: se enlazan por su URL publica
     private final String sucursalUrl;
@@ -28,26 +31,33 @@ public class ProductoAssembler implements RepresentationModelAssembler<Producto,
         this.sucursalUrl = sucursalUrl;
     }
 
-    @Override
-    public EntityModel<ProductoResponse> toModel(Producto producto)
+    public Mono<EntityModel<ProductoResponse>> toModel(Producto producto)
     {
         UUID productoId = producto.getId();
 
-        return EntityModel.of(DtoMapper.toResponse(producto),
-                linkTo(methodOn(ProductoController.class).obtener(productoId)).withSelfRel(),
-                sucursal(producto.getSucursalId()),
-                linkTo(methodOn(ProductoController.class).obtener(productoId)).withRel("obtener_producto"),
-                linkTo(methodOn(ProductoController.class).renombrar(productoId, null)).withRel("renombrar_producto"),
-                linkTo(methodOn(ProductoController.class).eliminar(productoId)).withRel("eliminar_producto"),
-                linkTo(methodOn(ProductoController.class).modificarStock(productoId, null))
-                        .withRel("modificar_stock_producto"));
+        return Flux.concat(
+                        linkTo(methodOn(ProductoController.class).obtener(productoId)).withSelfRel().toMono(),
+                        Mono.just(sucursal(producto.getSucursalId())),
+                        linkTo(methodOn(ProductoController.class).obtener(productoId))
+                                .withRel("obtener_producto").toMono(),
+                        linkTo(methodOn(ProductoController.class).renombrar(productoId, null))
+                                .withRel("renombrar_producto").toMono(),
+                        linkTo(methodOn(ProductoController.class).eliminar(productoId))
+                                .withRel("eliminar_producto").toMono(),
+                        linkTo(methodOn(ProductoController.class).modificarStock(productoId, null))
+                                .withRel("modificar_stock_producto").toMono())
+                .collectList()
+                .map(links -> EntityModel.of(DtoMapper.toResponse(producto), links));
     }
 
-    public CollectionModel<EntityModel<ProductoResponse>> toCollectionModel(List<Producto> productos, UUID sucursalId)
+    public Mono<CollectionModel<EntityModel<ProductoResponse>>> toCollectionModel(Flux<Producto> productos,
+                                                                                 UUID sucursalId)
     {
-        return toCollectionModel(productos)
-                .add(linkTo(methodOn(ProductoController.class).listar(sucursalId)).withSelfRel())
-                .add(sucursal(sucursalId));
+        return productos.concatMap(this::toModel)
+                .collectList()
+                .zipWith(linkTo(methodOn(ProductoController.class).listar(sucursalId)).withSelfRel().toMono())
+                .map(modelosYEnlace -> CollectionModel.of(modelosYEnlace.getT1(),
+                        modelosYEnlace.getT2(), sucursal(sucursalId)));
     }
 
     private Link sucursal(UUID sucursalId)

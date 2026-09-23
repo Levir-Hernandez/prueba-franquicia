@@ -9,28 +9,28 @@ import com.levir.hernandez.producto.application.port.out.ProductoConMayorStock;
 import com.levir.hernandez.producto.domain.model.Producto;
 import com.levir.hernandez.producto.infrastructure.adapter.in.web.assembler.ProductoAssembler;
 import com.levir.hernandez.producto.infrastructure.adapter.in.web.assembler.ProductoConMayorStockAssembler;
+import com.levir.hernandez.producto.infrastructure.config.HateoasConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ProductoController.class)
-@Import({ProductoAssembler.class, ProductoConMayorStockAssembler.class})
+@WebFluxTest(ProductoController.class)
+@Import({ProductoAssembler.class, ProductoConMayorStockAssembler.class, HateoasConfig.class})
 class ProductoControllerTest
 {
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     private AgregarProductoUseCase agregarProducto;
@@ -56,202 +56,202 @@ class ProductoControllerTest
         return new Producto(productoId, nombre, stock, sucursalId);
     }
 
+    private WebTestClient.ResponseSpec enviar(WebTestClient.RequestBodyUriSpec metodo, String uri, Object id, String json)
+    {
+        return metodo.uri(uri, id).contentType(MediaType.APPLICATION_JSON).bodyValue(json).exchange();
+    }
+
     @Test
     @DisplayName("Deberia responder 201 al agregar un producto")
-    void agregaProducto() throws Exception
+    void agregaProducto()
     {
         when(agregarProducto.agregarProducto(sucursalId, "Hamburguesa clasica", 10))
-                .thenReturn(producto("Hamburguesa clasica", 10));
+                .thenReturn(Mono.just(producto("Hamburguesa clasica", 10)));
 
-        mockMvc.perform(post("/api/v1/sucursales/{id}/productos", sucursalId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}"))
-                .andExpect(status().isCreated())
-                .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$.stock").value(10));
+        enviar(webTestClient.post(), "/api/v1/sucursales/{id}/productos", sucursalId,
+                "{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}")
+                .expectStatus().isCreated()
+                .expectHeader().exists("Location")
+                .expectBody().jsonPath("$.stock").isEqualTo(10);
     }
 
     @Test
     @DisplayName("Deberia responder 400 al agregar un producto con stock negativo")
-    void noAgregaProductoConStockNegativo() throws Exception
+    void noAgregaProductoConStockNegativo()
     {
-        mockMvc.perform(post("/api/v1/sucursales/{id}/productos", sucursalId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"Hamburguesa clasica\", \"stock\": -1}"))
-                .andExpect(status().isBadRequest());
+        enviar(webTestClient.post(), "/api/v1/sucursales/{id}/productos", sucursalId,
+                "{\"nombre\": \"Hamburguesa clasica\", \"stock\": -1}")
+                .expectStatus().isBadRequest();
 
         verifyNoInteractions(agregarProducto);
     }
 
     @Test
     @DisplayName("Deberia responder 404 al agregar un producto a una sucursal que no existe")
-    void noAgregaProductoASucursalInexistente() throws Exception
+    void noAgregaProductoASucursalInexistente()
     {
         when(agregarProducto.agregarProducto(sucursalId, "Hamburguesa clasica", 10))
-                .thenThrow(new SucursalNoEncontradaException(sucursalId));
+                .thenReturn(Mono.error(new SucursalNoEncontradaException(sucursalId)));
 
-        mockMvc.perform(post("/api/v1/sucursales/{id}/productos", sucursalId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}"))
-                .andExpect(status().isNotFound());
+        enviar(webTestClient.post(), "/api/v1/sucursales/{id}/productos", sucursalId,
+                "{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}")
+                .expectStatus().isNotFound();
     }
 
     @Test
     @DisplayName("Deberia responder 503 al agregar un producto si el servicio de sucursales no esta disponible")
-    void noAgregaProductoSiServicioNoDisponible() throws Exception
+    void noAgregaProductoSiServicioNoDisponible()
     {
         when(agregarProducto.agregarProducto(sucursalId, "Hamburguesa clasica", 10))
-                .thenThrow(new ServicioNoDisponibleException("sucursales"));
+                .thenReturn(Mono.error(new ServicioNoDisponibleException("sucursales")));
 
-        mockMvc.perform(post("/api/v1/sucursales/{id}/productos", sucursalId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}"))
-                .andExpect(status().isServiceUnavailable());
+        enviar(webTestClient.post(), "/api/v1/sucursales/{id}/productos", sucursalId,
+                "{\"nombre\": \"Hamburguesa clasica\", \"stock\": 10}")
+                .expectStatus().isEqualTo(503);
     }
 
     @Test
     @DisplayName("Deberia responder 200 al listar los productos de una sucursal")
-    void listaProductos() throws Exception
+    void listaProductos()
     {
-        when(obtenerProductos.obtenerProductos(sucursalId)).thenReturn(List.of(producto("Hamburguesa clasica", 10)));
+        when(obtenerProductos.obtenerProductos(sucursalId)).thenReturn(Flux.just(producto("Hamburguesa clasica", 10)));
 
-        mockMvc.perform(get("/api/v1/sucursales/{id}/productos", sucursalId))
-                .andExpect(status().isOk());
+        webTestClient.get().uri("/api/v1/sucursales/{id}/productos", sucursalId).exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$._embedded.productos[0].nombre").isEqualTo("Hamburguesa clasica");
     }
 
     @Test
     @DisplayName("Deberia responder 200 al obtener un producto existente")
-    void obtieneProducto() throws Exception
+    void obtieneProducto()
     {
-        when(obtenerProducto.obtenerProducto(productoId)).thenReturn(producto("Hamburguesa clasica", 10));
+        when(obtenerProducto.obtenerProducto(productoId)).thenReturn(Mono.just(producto("Hamburguesa clasica", 10)));
 
-        mockMvc.perform(get("/api/v1/productos/{id}", productoId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nombre").value("Hamburguesa clasica"));
+        webTestClient.get().uri("/api/v1/productos/{id}", productoId).exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.nombre").isEqualTo("Hamburguesa clasica")
+                .jsonPath("$._links.self.href").exists();
     }
 
     @Test
     @DisplayName("Deberia responder 400 al obtener un producto con un id que no es UUID")
-    void noObtieneProductoConIdInvalido() throws Exception
+    void noObtieneProductoConIdInvalido()
     {
-        mockMvc.perform(get("/api/v1/productos/{id}", "no-es-uuid"))
-                .andExpect(status().isBadRequest());
+        webTestClient.get().uri("/api/v1/productos/{id}", "no-es-uuid").exchange()
+                .expectStatus().isBadRequest();
 
         verifyNoInteractions(obtenerProducto);
     }
 
     @Test
     @DisplayName("Deberia responder 404 al obtener un producto que no existe")
-    void noObtieneProductoInexistente() throws Exception
+    void noObtieneProductoInexistente()
     {
-        when(obtenerProducto.obtenerProducto(productoId)).thenThrow(new ProductoNoEncontradoException(productoId));
+        when(obtenerProducto.obtenerProducto(productoId))
+                .thenReturn(Mono.error(new ProductoNoEncontradoException(productoId)));
 
-        mockMvc.perform(get("/api/v1/productos/{id}", productoId))
-                .andExpect(status().isNotFound());
+        webTestClient.get().uri("/api/v1/productos/{id}", productoId).exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
     @DisplayName("Deberia responder 204 al eliminar un producto")
-    void eliminaProducto() throws Exception
+    void eliminaProducto()
     {
-        mockMvc.perform(delete("/api/v1/productos/{id}", productoId))
-                .andExpect(status().isNoContent());
+        when(eliminarProducto.eliminarProducto(productoId)).thenReturn(Mono.empty());
+
+        webTestClient.delete().uri("/api/v1/productos/{id}", productoId).exchange()
+                .expectStatus().isNoContent();
 
         verify(eliminarProducto).eliminarProducto(productoId);
     }
 
     @Test
     @DisplayName("Deberia responder 404 al eliminar un producto que no existe")
-    void noEliminaProductoInexistente() throws Exception
+    void noEliminaProductoInexistente()
     {
-        doThrow(new ProductoNoEncontradoException(productoId)).when(eliminarProducto).eliminarProducto(productoId);
+        when(eliminarProducto.eliminarProducto(productoId))
+                .thenReturn(Mono.error(new ProductoNoEncontradoException(productoId)));
 
-        mockMvc.perform(delete("/api/v1/productos/{id}", productoId))
-                .andExpect(status().isNotFound());
+        webTestClient.delete().uri("/api/v1/productos/{id}", productoId).exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
     @DisplayName("Deberia responder 200 al modificar el stock de un producto")
-    void modificaStock() throws Exception
+    void modificaStock()
     {
         when(modificarStockProducto.modificarStockProducto(productoId, 25))
-                .thenReturn(producto("Hamburguesa clasica", 25));
+                .thenReturn(Mono.just(producto("Hamburguesa clasica", 25)));
 
-        mockMvc.perform(patch("/api/v1/productos/{id}/stock", productoId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"stock\": 25}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.stock").value(25));
+        enviar(webTestClient.patch(), "/api/v1/productos/{id}/stock", productoId, "{\"stock\": 25}")
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.stock").isEqualTo(25);
     }
 
     @Test
     @DisplayName("Deberia responder 400 al modificar el stock sin valor")
-    void noModificaStockSinValor() throws Exception
+    void noModificaStockSinValor()
     {
-        mockMvc.perform(patch("/api/v1/productos/{id}/stock", productoId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest());
+        enviar(webTestClient.patch(), "/api/v1/productos/{id}/stock", productoId, "{}")
+                .expectStatus().isBadRequest();
 
         verifyNoInteractions(modificarStockProducto);
     }
 
     @Test
     @DisplayName("Deberia responder 404 al modificar el stock de un producto que no existe")
-    void noModificaStockProductoInexistente() throws Exception
+    void noModificaStockProductoInexistente()
     {
         when(modificarStockProducto.modificarStockProducto(productoId, 25))
-                .thenThrow(new ProductoNoEncontradoException(productoId));
+                .thenReturn(Mono.error(new ProductoNoEncontradoException(productoId)));
 
-        mockMvc.perform(patch("/api/v1/productos/{id}/stock", productoId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"stock\": 25}"))
-                .andExpect(status().isNotFound());
+        enviar(webTestClient.patch(), "/api/v1/productos/{id}/stock", productoId, "{\"stock\": 25}")
+                .expectStatus().isNotFound();
     }
 
     @Test
     @DisplayName("Deberia responder 200 al renombrar un producto")
-    void renombraProducto() throws Exception
+    void renombraProducto()
     {
         when(renombrarProducto.renombrarProducto(productoId, "Hamburguesa doble"))
-                .thenReturn(producto("Hamburguesa doble", 10));
+                .thenReturn(Mono.just(producto("Hamburguesa doble", 10)));
 
-        mockMvc.perform(patch("/api/v1/productos/{id}/nombre", productoId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"Hamburguesa doble\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nombre").value("Hamburguesa doble"));
+        enviar(webTestClient.patch(), "/api/v1/productos/{id}/nombre", productoId,
+                "{\"nombre\": \"Hamburguesa doble\"}")
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.nombre").isEqualTo("Hamburguesa doble");
     }
 
     @Test
     @DisplayName("Deberia responder 400 al renombrar un producto sin nombre")
-    void noRenombraProductoSinNombre() throws Exception
+    void noRenombraProductoSinNombre()
     {
-        mockMvc.perform(patch("/api/v1/productos/{id}/nombre", productoId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\": \"\"}"))
-                .andExpect(status().isBadRequest());
+        enviar(webTestClient.patch(), "/api/v1/productos/{id}/nombre", productoId, "{\"nombre\": \"\"}")
+                .expectStatus().isBadRequest();
 
         verifyNoInteractions(renombrarProducto);
     }
 
     @Test
     @DisplayName("Deberia responder 200 al listar los productos con mayor stock de una franquicia")
-    void listaProductosConMayorStock() throws Exception
+    void listaProductosConMayorStock()
     {
-        when(obtenerProductosConMayorStock.obtenerProductosConMayorStock(franquiciaId)).thenReturn(List.of(
+        when(obtenerProductosConMayorStock.obtenerProductosConMayorStock(franquiciaId)).thenReturn(Flux.just(
                 new ProductoConMayorStock(productoId, "Hamburguesa clasica", 30, sucursalId, "Burger Express Centro")));
 
-        mockMvc.perform(get("/api/v1/franquicias/{id}/productos/mayor-stock", franquiciaId))
-                .andExpect(status().isOk());
+        webTestClient.get().uri("/api/v1/franquicias/{id}/productos/mayor-stock", franquiciaId).exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$._embedded.productos[0].sucursalNombre").isEqualTo("Burger Express Centro");
     }
 
     @Test
     @DisplayName("Deberia responder 400 al listar productos con mayor stock con un id que no es UUID")
-    void noListaProductosConMayorStockConIdInvalido() throws Exception
+    void noListaProductosConMayorStockConIdInvalido()
     {
-        mockMvc.perform(get("/api/v1/franquicias/{id}/productos/mayor-stock", "no-es-uuid"))
-                .andExpect(status().isBadRequest());
+        webTestClient.get().uri("/api/v1/franquicias/{id}/productos/mayor-stock", "no-es-uuid").exchange()
+                .expectStatus().isBadRequest();
 
         verifyNoInteractions(obtenerProductosConMayorStock);
     }

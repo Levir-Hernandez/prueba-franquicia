@@ -23,6 +23,7 @@ import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -60,15 +61,15 @@ public class SucursalController
     })
     @PostMapping("/franquicias/{franquiciaId}/sucursales")
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<EntityModel<SucursalResponse>> agregar(
+    public Mono<ResponseEntity<EntityModel<SucursalResponse>>> agregar(
             @Parameter(description = "Id de la franquicia", required = true)
             @PathVariable UUID franquiciaId,
 
             @Valid @RequestBody NombreRecursoRequest request)
     {
-        EntityModel<SucursalResponse> body = assembler.toModel(
-                agregarSucursal.agregarSucursal(franquiciaId, request.nombre()));
-        return ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body);
+        return agregarSucursal.agregarSucursal(franquiciaId, request.nombre())
+                .flatMap(assembler::toModel)
+                .map(body -> ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body));
     }
 
     // ObtenerSucursalesUseCase
@@ -85,7 +86,7 @@ public class SucursalController
     })
     @GetMapping("/franquicias/{franquiciaId}/sucursales")
     @ResponseStatus(HttpStatus.OK)
-    public CollectionModel<EntityModel<SucursalResponse>> listar(
+    public Mono<CollectionModel<EntityModel<SucursalResponse>>> listar(
             @Parameter(description = "Id de la franquicia", required = true)
             @PathVariable UUID franquiciaId)
     {
@@ -107,11 +108,11 @@ public class SucursalController
     })
     @GetMapping("/sucursales/{sucursalId}")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<SucursalResponse> obtener(
+    public Mono<EntityModel<SucursalResponse>> obtener(
             @Parameter(description = "Id de la sucursal", required = true)
             @PathVariable UUID sucursalId)
     {
-        return assembler.toModel(obtenerSucursal.obtenerSucursal(sucursalId));
+        return obtenerSucursal.obtenerSucursal(sucursalId).flatMap(assembler::toModel);
     }
 
     // RenombrarSucursalUseCase
@@ -135,12 +136,12 @@ public class SucursalController
     })
     @PatchMapping("/sucursales/{sucursalId}/nombre")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<SucursalResponse> renombrar(
+    public Mono<EntityModel<SucursalResponse>> renombrar(
             @Parameter(description = "Id de la sucursal", required = true)
             @PathVariable UUID sucursalId,
 
             @Valid @RequestBody NombreRecursoRequest request)
     {
-        return assembler.toModel(renombrarSucursal.renombrarSucursal(sucursalId, request.nombre()));
+        return renombrarSucursal.renombrarSucursal(sucursalId, request.nombre()).flatMap(assembler::toModel);
     }
 }

@@ -13,11 +13,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -39,48 +40,58 @@ class AgregarSucursalServiceTest
     @DisplayName("Deberia agregar una sucursal nueva asociada a su franquicia")
     void agregaSucursal()
     {
-        when(franquiciaConsulta.existeFranquicia(franquiciaId)).thenReturn(true);
-        when(sucursalRepository.guardarSucursal(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(franquiciaConsulta.existeFranquicia(franquiciaId)).thenReturn(Mono.just(true));
+        when(sucursalRepository.guardarSucursal(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        Sucursal creada = service.agregarSucursal(franquiciaId, "Burger Express Centro");
+        StepVerifier.create(service.agregarSucursal(franquiciaId, "Burger Express Centro"))
+                .assertNext(creada ->
+                {
+                    assertThat(creada.getNombre()).isEqualTo("Burger Express Centro");
+                    assertThat(creada.getFranquiciaId()).isEqualTo(franquiciaId);
+                })
+                .verifyComplete();
 
         ArgumentCaptor<Sucursal> captor = ArgumentCaptor.forClass(Sucursal.class);
         verify(sucursalRepository).guardarSucursal(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
-        assertThat(creada.getNombre()).isEqualTo("Burger Express Centro");
-        assertThat(creada.getFranquiciaId()).isEqualTo(franquiciaId);
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al agregar una sucursal con nombre invalido")
+    @DisplayName("Deberia emitir error y no guardar al agregar una sucursal con nombre invalido")
     void noAgregaSucursalConNombreInvalido()
     {
-        assertThatThrownBy(() -> service.agregarSucursal(franquiciaId, ""))
-                .isInstanceOf(SucursalInvalidaException.class);
+        StepVerifier.create(service.agregarSucursal(franquiciaId, ""))
+                .expectError(SucursalInvalidaException.class)
+                .verify();
+
         verifyNoInteractions(franquiciaConsulta);
         verify(sucursalRepository, never()).guardarSucursal(any());
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al agregar una sucursal a una franquicia que no existe")
+    @DisplayName("Deberia emitir error y no guardar al agregar una sucursal a una franquicia que no existe")
     void noAgregaSucursalAFranquiciaInexistente()
     {
-        when(franquiciaConsulta.existeFranquicia(franquiciaId)).thenReturn(false);
+        when(franquiciaConsulta.existeFranquicia(franquiciaId)).thenReturn(Mono.just(false));
 
-        assertThatThrownBy(() -> service.agregarSucursal(franquiciaId, "Burger Express Centro"))
-                .isInstanceOf(FranquiciaNoEncontradaException.class);
+        StepVerifier.create(service.agregarSucursal(franquiciaId, "Burger Express Centro"))
+                .expectError(FranquiciaNoEncontradaException.class)
+                .verify();
+
         verify(sucursalRepository, never()).guardarSucursal(any());
     }
 
     @Test
-    @DisplayName("Deberia propagar la excepcion y no guardar si el servicio de franquicias no esta disponible")
+    @DisplayName("Deberia propagar el error y no guardar si el servicio de franquicias no esta disponible")
     void noAgregaSucursalSiServicioNoDisponible()
     {
         when(franquiciaConsulta.existeFranquicia(franquiciaId))
-                .thenThrow(new ServicioNoDisponibleException("franquicias"));
+                .thenReturn(Mono.error(new ServicioNoDisponibleException("franquicias")));
 
-        assertThatThrownBy(() -> service.agregarSucursal(franquiciaId, "Burger Express Centro"))
-                .isInstanceOf(ServicioNoDisponibleException.class);
+        StepVerifier.create(service.agregarSucursal(franquiciaId, "Burger Express Centro"))
+                .expectError(ServicioNoDisponibleException.class)
+                .verify();
+
         verify(sucursalRepository, never()).guardarSucursal(any());
     }
 }
