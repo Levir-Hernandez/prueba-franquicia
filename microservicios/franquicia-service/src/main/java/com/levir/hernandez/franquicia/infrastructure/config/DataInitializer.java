@@ -1,0 +1,64 @@
+package com.levir.hernandez.franquicia.infrastructure.config;
+
+import com.levir.hernandez.franquicia.application.port.out.FranquiciaRepositoryPort;
+import com.levir.hernandez.franquicia.domain.model.Franquicia;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Carga datos de ejemplo desde un JSON al arrancar.
+ * Los ids son fijos para que los otros servicios puedan referenciarlos en sus propios datos iniciales.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class DataInitializer
+{
+    private final JsonMapper jsonMapper;
+    private final FranquiciaRepositoryPort franquiciaRepository;
+
+    @Value("${app.datos-iniciales.path:}")
+    private String path;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void cargarDatosIniciales()
+    {
+        if (path.isBlank()) return;
+
+        // Solo se insertan los ids que aun no existen: no duplica ni sobrescribe cambios hechos por la API
+        List<FranquiciaJson> nuevos = leerArchivo().stream()
+                .filter(json -> franquiciaRepository.obtenerFranquiciaPorId(json.id()).isEmpty())
+                .toList();
+
+        nuevos.forEach(json -> franquiciaRepository.guardarFranquicia(new Franquicia(json.id(), json.nombre())));
+
+        log.info("Datos iniciales cargados desde {}: {} franquicias nuevas", path, nuevos.size());
+    }
+
+    private List<FranquiciaJson> leerArchivo()
+    {
+        try (InputStream contenido = new ClassPathResource(path).getInputStream())
+        {
+            return jsonMapper.readValue(contenido, new TypeReference<>() {});
+        }
+        catch (IOException e)
+        {
+            log.warn("No se pudieron leer los datos iniciales de {}: {}", path, e.getMessage());
+            return List.of();
+        }
+    }
+
+    record FranquiciaJson(UUID id, String nombre) {}
+}
