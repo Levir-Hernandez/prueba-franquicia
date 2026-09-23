@@ -1,29 +1,79 @@
+name: microservicios
+
+# Entorno local completo: `docker compose up --build`
+#   franquicia-service -> http://localhost:8081   sucursal-service -> http://localhost:8082
+#   producto-service   -> http://localhost:8083   consola ActiveMQ -> http://localhost:8161 (admin/admin)
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: franquicias
-      POSTGRES_USER: franquicias
-      POSTGRES_PASSWORD: franquicias
+
+  activemq:
+    image: apache/activemq-classic:6.1.7
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - "61616:61616"
+      - "8161:8161"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U franquicias -d franquicias"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/61616'"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
-  api:
-    build: ./franquicia
+  # Una base de datos por microservicio
+  mongo-franquicia:
+    image: mongo:8
+    volumes:
+      - mongo-franquicia-data:/data/db
+  mongo-sucursal:
+    image: mongo:8
+    volumes:
+      - mongo-sucursal-data:/data/db
+  mongo-producto:
+    image: mongo:8
+    volumes:
+      - mongo-producto-data:/data/db
+
+  franquicia-service:
+    build: ./microservicios/franquicia-service
     depends_on:
-      postgres:
+      activemq:
         condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres:5432/franquicias
+      mongo-franquicia:
+        condition: service_started
+    environment: &servicio
+      SERVER_PORT: 8080
+      ACTIVEMQ_URL: tcp://activemq:61616
+      MONGO_URI: mongodb://mongo-franquicia:27017/franquicias
+      FRANQUICIA_URL: http://localhost:8081
+      SUCURSAL_URL: http://localhost:8082
+      PRODUCTO_URL: http://localhost:8083
     ports:
-      - "8080:8080"
+      - "8081:8080"
+
+  sucursal-service:
+    build: ./microservicios/sucursal-service
+    depends_on:
+      activemq:
+        condition: service_healthy
+      mongo-sucursal:
+        condition: service_started
+    environment:
+      <<: *servicio
+      MONGO_URI: mongodb://mongo-sucursal:27017/sucursales
+    ports:
+      - "8082:8080"
+
+  producto-service:
+    build: ./microservicios/producto-service
+    depends_on:
+      activemq:
+        condition: service_healthy
+      mongo-producto:
+        condition: service_started
+    environment:
+      <<: *servicio
+      MONGO_URI: mongodb://mongo-producto:27017/productos
+    ports:
+      - "8083:8080"
 
 volumes:
-  postgres-data:
+  mongo-franquicia-data:
+  mongo-sucursal-data:
+  mongo-producto-data:
