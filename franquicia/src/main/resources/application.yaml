@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: franquicia
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/franquicias}
+    username: ${DB_USER:franquicias}
+    password: ${DB_PASSWORD:franquicias}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  datos-iniciales:
+    path: ${DATOS_INICIALES_PATH:data/franquicias.json}
+
+logging:
+  pattern:
+    correlation: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %+5level ${PID} --- [${spring.application.name}] [%+15.15thread]  [%6.6X{traceId}] %-40.40logger{39} : %msg%n"

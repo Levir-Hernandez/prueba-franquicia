@@ -1,0 +1,292 @@
+{
+  "info": {
+    "name": "Franquicia API",
+    "description": "API para gestionar franquicias, sus sucursales y los productos de cada sucursal. Los POST guardan el id devuelto en las variables de coleccion, de modo que la coleccion se puede ejecutar de arriba abajo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "franquiciaId", "value": "", "type": "string" },
+    { "key": "sucursalId", "value": "", "type": "string" },
+    { "key": "productoId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Franquicias",
+      "item": [
+        {
+          "name": "Agregar franquicia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('franquiciaId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Franquicia Norte\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias"]
+            },
+            "description": "AgregarFranquiciaUseCase. Responde 201 con la cabecera Location, o 400 si el nombre esta vacio o supera los 100 caracteres."
+          }
+        },
+        {
+          "name": "Listar franquicias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias"]
+            },
+            "description": "ObtenerFranquiciasUseCase. Responde 200 con las franquicias ordenadas por nombre."
+          }
+        },
+        {
+          "name": "Consultar franquicia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias/{{franquiciaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias", "{{franquiciaId}}"]
+            },
+            "description": "ObtenerFranquiciaUseCase. Responde 200, 404 si no existe, o 400 si el id no es un UUID valido."
+          }
+        },
+        {
+          "name": "Renombrar franquicia",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Franquicia Sur\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias/{{franquiciaId}}/nombre",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias", "{{franquiciaId}}", "nombre"]
+            },
+            "description": "RenombrarFranquiciaUseCase. Responde 200, 404 si no existe, o 400 si el nombre es invalido."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sucursales",
+      "item": [
+        {
+          "name": "Agregar sucursal a franquicia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('sucursalId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Sucursal Centro\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias/{{franquiciaId}}/sucursales",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias", "{{franquiciaId}}", "sucursales"]
+            },
+            "description": "AgregarSucursalUseCase. La franquicia de la ruta debe existir. Responde 201 con la cabecera Location."
+          }
+        },
+        {
+          "name": "Listar sucursales de una franquicia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias/{{franquiciaId}}/sucursales",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias", "{{franquiciaId}}", "sucursales"]
+            },
+            "description": "ObtenerSucursalesUseCase. Responde 200 con las sucursales ordenadas por nombre; coleccion vacia si no hay ninguna."
+          }
+        },
+        {
+          "name": "Consultar sucursal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sucursales/{{sucursalId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sucursales", "{{sucursalId}}"]
+            },
+            "description": "ObtenerSucursalUseCase. Responde 200, 404 si no existe, o 400 si el id no es un UUID valido."
+          }
+        },
+        {
+          "name": "Renombrar sucursal",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Sucursal Poblado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sucursales/{{sucursalId}}/nombre",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sucursales", "{{sucursalId}}", "nombre"]
+            },
+            "description": "RenombrarSucursalUseCase. Responde 200, 404 si no existe, o 400 si el nombre es invalido."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Productos",
+      "item": [
+        {
+          "name": "Agregar producto a sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('productoId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Cafe 500g\",\n    \"stock\": 25\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sucursales/{{sucursalId}}/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sucursales", "{{sucursalId}}", "productos"]
+            },
+            "description": "AgregarProductoUseCase. La sucursal de la ruta debe existir. Responde 201 con la cabecera Location."
+          }
+        },
+        {
+          "name": "Listar productos de una sucursal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sucursales/{{sucursalId}}/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sucursales", "{{sucursalId}}", "productos"]
+            },
+            "description": "ObtenerProductosUseCase. Responde 200 con los productos ordenados por nombre; coleccion vacia si no hay ninguno."
+          }
+        },
+        {
+          "name": "Consultar producto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/productos/{{productoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "productos", "{{productoId}}"]
+            },
+            "description": "ObtenerProductoUseCase. Responde 200, 404 si no existe, o 400 si el id no es un UUID valido."
+          }
+        },
+        {
+          "name": "Modificar stock de un producto",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"stock\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/productos/{{productoId}}/stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "productos", "{{productoId}}", "stock"]
+            },
+            "description": "ModificarStockProductoUseCase. El stock se reemplaza, no se incrementa. Responde 400 si es nulo o negativo."
+          }
+        },
+        {
+          "name": "Renombrar producto",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nombre\": \"Cafe molido 500g\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/productos/{{productoId}}/nombre",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "productos", "{{productoId}}", "nombre"]
+            },
+            "description": "RenombrarProductoUseCase. Responde 200, 404 si no existe, o 400 si el nombre es invalido."
+          }
+        },
+        {
+          "name": "Producto con mas stock por sucursal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/franquicias/{{franquiciaId}}/productos/mayor-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "franquicias", "{{franquiciaId}}", "productos", "mayor-stock"]
+            },
+            "description": "ObtenerProductosConMayorStockUseCase. Devuelve el producto con mas stock de cada sucursal de la franquicia, indicando a que sucursal pertenece. Si hay empate se devuelven todos y las sucursales sin productos no aparecen."
+          }
+        },
+        {
+          "name": "Eliminar producto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/productos/{{productoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "productos", "{{productoId}}"]
+            },
+            "description": "EliminarProductoUseCase. Responde 204 sin cuerpo, o 404 si el producto no existe."
+          }
+        }
+      ]
+    }
+  ]
+}
