@@ -1,0 +1,30 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf update -y
+dnf install -y docker jq
+systemctl enable --now docker
+
+SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "${db_secret_id}" \
+  --region "${aws_region}" \
+  --query SecretString \
+  --output text)
+
+DB_HOST=$(echo "$SECRET" | jq -r .host)
+DB_PORT=$(echo "$SECRET" | jq -r .port)
+DB_NAME=$(echo "$SECRET" | jq -r .dbname)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASSWORD=$(echo "$SECRET" | jq -r .password)
+
+aws ecr get-login-password --region "${aws_region}" \
+  | docker login --username AWS --password-stdin "${api_registry}"
+
+docker run -d \
+  --name franquicia-api \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e DB_URL="jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME" \
+  -e DB_USER="$DB_USER" \
+  -e DB_PASSWORD="$DB_PASSWORD" \
+  "${api_image}"
