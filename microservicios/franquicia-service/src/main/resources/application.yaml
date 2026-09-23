@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: franquicia-service
+  mongodb:
+    uri: ${MONGO_URI:mongodb://localhost:27017/franquicias}
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/franquicias}
+      auto-index-creation: true
+  activemq:
+    broker-url: ${ACTIVEMQ_URL:tcp://localhost:61616}
+    user: ${ACTIVEMQ_USER:admin}
+    password: ${ACTIVEMQ_PASSWORD:admin}
+
+server:
+  port: ${SERVER_PORT:8081}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  # Contrato de colas de ActiveMQ entre microservicios
+  mensajeria:
+    colas:
+      # responde: id de franquicia -> "true" | "false"
+      franquicia-existe: franquicia.consulta.existe
+  # Datos de ejemplo (ids fijos compartidos entre servicios). Vacio para no cargar nada
+  datos-iniciales:
+    path: ${DATOS_INICIALES_PATH:data/franquicias.json}
+  servicios:
+    franquicia-url: ${FRANQUICIA_URL:http://localhost:8081}
+    sucursal-url: ${SUCURSAL_URL:http://localhost:8082}
+    producto-url: ${PRODUCTO_URL:http://localhost:8083}
+
+logging:
+  pattern:
+    correlation: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %+5level ${PID} --- [${spring.application.name}] [%+15.15thread]  [%6.6X{traceId}] %-40.40logger{39} : %msg%n"
