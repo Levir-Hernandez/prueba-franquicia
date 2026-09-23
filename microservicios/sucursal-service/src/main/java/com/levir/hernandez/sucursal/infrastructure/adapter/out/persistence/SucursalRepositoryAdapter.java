@@ -6,8 +6,9 @@ import com.levir.hernandez.sucursal.infrastructure.adapter.out.persistence.docum
 import com.levir.hernandez.sucursal.infrastructure.adapter.out.persistence.repository.SucursalMongoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,28 +19,28 @@ public class SucursalRepositoryAdapter implements SucursalRepositoryPort
     private final SucursalMongoRepository sucursalRepository;
 
     @Override
-    public Sucursal guardarSucursal(Sucursal sucursal)
+    public Mono<Sucursal> guardarSucursal(Sucursal sucursal)
     {
         // Mongo no genera UUIDs: si la sucursal es nueva se le asigna uno aqui
         UUID id = Optional.ofNullable(sucursal.getId()).orElseGet(UUID::randomUUID);
 
-        return toDomain(sucursalRepository.save(new SucursalDocument(
-                id.toString(), sucursal.getNombre(), sucursal.getFranquiciaId().toString())));
+        return sucursalRepository.save(new SucursalDocument(
+                        id.toString(), sucursal.getNombre(), sucursal.getFranquiciaId().toString()))
+                .map(SucursalRepositoryAdapter::toDomain);
     }
 
     @Override
-    public Optional<Sucursal> obtenerSucursalPorId(UUID sucursalId)
+    public Mono<Sucursal> obtenerSucursalPorId(UUID sucursalId)
     {
         return sucursalRepository.findById(sucursalId.toString())
                 .map(SucursalRepositoryAdapter::toDomain);
     }
 
     @Override
-    public List<Sucursal> obtenerSucursalesPorIdDeFranquicia(UUID franquiciaId)
+    public Flux<Sucursal> obtenerSucursalesPorIdDeFranquicia(UUID franquiciaId)
     {
-        return sucursalRepository.findByFranquiciaId(franquiciaId.toString()).stream()
-                .map(SucursalRepositoryAdapter::toDomain)
-                .toList();
+        return sucursalRepository.findByFranquiciaId(franquiciaId.toString())
+                .map(SucursalRepositoryAdapter::toDomain);
     }
 
     private static Sucursal toDomain(SucursalDocument document)

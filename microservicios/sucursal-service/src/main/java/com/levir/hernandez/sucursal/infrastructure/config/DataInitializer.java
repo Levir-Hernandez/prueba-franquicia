@@ -9,6 +9,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -39,14 +40,14 @@ public class DataInitializer
         if (path.isBlank()) return;
 
         // Solo se insertan los ids que aun no existen: no duplica ni sobrescribe cambios hechos por la API
-        List<SucursalJson> nuevos = leerArchivo().stream()
-                .filter(json -> sucursalRepository.obtenerSucursalPorId(json.id()).isEmpty())
-                .toList();
-
-        nuevos.forEach(json -> sucursalRepository.guardarSucursal(
-                new Sucursal(json.id(), json.nombre(), json.franquiciaId())));
-
-        log.info("Datos iniciales cargados desde {}: {} sucursales nuevas", path, nuevos.size());
+        Flux.fromIterable(leerArchivo())
+                .filterWhen(json -> sucursalRepository.obtenerSucursalPorId(json.id()).hasElement().map(existe -> !existe))
+                .concatMap(json -> sucursalRepository.guardarSucursal(
+                        new Sucursal(json.id(), json.nombre(), json.franquiciaId())))
+                .count()
+                .subscribe(
+                        nuevos -> log.info("Datos iniciales cargados desde {}: {} sucursales nuevas", path, nuevos),
+                        error -> log.warn("No se pudieron cargar los datos iniciales de {}: {}", path, error.toString()));
     }
 
     private List<SucursalJson> leerArchivo()

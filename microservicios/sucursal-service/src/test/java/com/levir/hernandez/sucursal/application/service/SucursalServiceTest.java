@@ -10,13 +10,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -37,40 +37,44 @@ class SucursalServiceTest
     void obtieneSucursalExistente()
     {
         when(sucursalRepository.obtenerSucursalPorId(sucursalId))
-                .thenReturn(Optional.of(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
+                .thenReturn(Mono.just(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
 
-        assertThat(service.obtenerSucursal(sucursalId).getNombre()).isEqualTo("Burger Express Centro");
+        StepVerifier.create(service.obtenerSucursal(sucursalId).map(Sucursal::getNombre))
+                .expectNext("Burger Express Centro")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion al obtener una sucursal que no existe")
+    @DisplayName("Deberia emitir error al obtener una sucursal que no existe")
     void noObtieneSucursalInexistente()
     {
-        when(sucursalRepository.obtenerSucursalPorId(sucursalId)).thenReturn(Optional.empty());
+        when(sucursalRepository.obtenerSucursalPorId(sucursalId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.obtenerSucursal(sucursalId))
-                .isInstanceOf(SucursalNoEncontradaException.class);
+        StepVerifier.create(service.obtenerSucursal(sucursalId))
+                .expectError(SucursalNoEncontradaException.class)
+                .verify();
     }
 
     @Test
     @DisplayName("Deberia obtener las sucursales de una franquicia que tiene sucursales")
     void obtieneSucursalesDeFranquicia()
     {
-        when(sucursalRepository.obtenerSucursalesPorIdDeFranquicia(franquiciaId)).thenReturn(List.of(
+        when(sucursalRepository.obtenerSucursalesPorIdDeFranquicia(franquiciaId)).thenReturn(Flux.just(
                 new Sucursal(UUID.randomUUID(), "Burger Express Centro", franquiciaId),
                 new Sucursal(UUID.randomUUID(), "Burger Express Poblado", franquiciaId)));
 
-        assertThat(service.obtenerSucursales(franquiciaId)).extracting(Sucursal::getNombre)
-                .containsExactlyInAnyOrder("Burger Express Centro", "Burger Express Poblado");
+        StepVerifier.create(service.obtenerSucursales(franquiciaId).map(Sucursal::getNombre))
+                .expectNext("Burger Express Centro", "Burger Express Poblado")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia devolver una lista vacia para una franquicia sin sucursales o que no existe")
+    @DisplayName("Deberia terminar vacio para una franquicia sin sucursales o que no existe")
     void obtieneListaVaciaSinSucursales()
     {
-        when(sucursalRepository.obtenerSucursalesPorIdDeFranquicia(franquiciaId)).thenReturn(List.of());
+        when(sucursalRepository.obtenerSucursalesPorIdDeFranquicia(franquiciaId)).thenReturn(Flux.empty());
 
-        assertThat(service.obtenerSucursales(franquiciaId)).isEmpty();
+        StepVerifier.create(service.obtenerSucursales(franquiciaId)).verifyComplete();
     }
 
     @Test
@@ -78,35 +82,42 @@ class SucursalServiceTest
     void renombraSucursal()
     {
         when(sucursalRepository.obtenerSucursalPorId(sucursalId))
-                .thenReturn(Optional.of(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
-        when(sucursalRepository.guardarSucursal(any())).thenAnswer(inv -> inv.getArgument(0));
+                .thenReturn(Mono.just(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
+        when(sucursalRepository.guardarSucursal(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        Sucursal renombrada = service.renombrarSucursal(sucursalId, "Burger Express Poblado");
-
-        assertThat(renombrada.getId()).isEqualTo(sucursalId);
-        assertThat(renombrada.getNombre()).isEqualTo("Burger Express Poblado");
+        StepVerifier.create(service.renombrarSucursal(sucursalId, "Burger Express Poblado"))
+                .assertNext(renombrada ->
+                {
+                    assertThat(renombrada.getId()).isEqualTo(sucursalId);
+                    assertThat(renombrada.getNombre()).isEqualTo("Burger Express Poblado");
+                })
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al renombrar una sucursal que no existe")
+    @DisplayName("Deberia emitir error y no guardar al renombrar una sucursal que no existe")
     void noRenombraSucursalInexistente()
     {
-        when(sucursalRepository.obtenerSucursalPorId(sucursalId)).thenReturn(Optional.empty());
+        when(sucursalRepository.obtenerSucursalPorId(sucursalId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.renombrarSucursal(sucursalId, "Burger Express Poblado"))
-                .isInstanceOf(SucursalNoEncontradaException.class);
+        StepVerifier.create(service.renombrarSucursal(sucursalId, "Burger Express Poblado"))
+                .expectError(SucursalNoEncontradaException.class)
+                .verify();
+
         verify(sucursalRepository, never()).guardarSucursal(any());
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al renombrar una sucursal con nombre invalido")
+    @DisplayName("Deberia emitir error y no guardar al renombrar una sucursal con nombre invalido")
     void noRenombraSucursalConNombreInvalido()
     {
         when(sucursalRepository.obtenerSucursalPorId(sucursalId))
-                .thenReturn(Optional.of(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
+                .thenReturn(Mono.just(new Sucursal(sucursalId, "Burger Express Centro", franquiciaId)));
 
-        assertThatThrownBy(() -> service.renombrarSucursal(sucursalId, ""))
-                .isInstanceOf(SucursalInvalidaException.class);
+        StepVerifier.create(service.renombrarSucursal(sucursalId, ""))
+                .expectError(SucursalInvalidaException.class)
+                .verify();
+
         verify(sucursalRepository, never()).guardarSucursal(any());
     }
 }

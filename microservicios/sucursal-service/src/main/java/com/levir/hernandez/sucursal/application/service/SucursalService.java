@@ -8,8 +8,9 @@ import com.levir.hernandez.sucursal.application.port.in.sucursal.RenombrarSucurs
 import com.levir.hernandez.sucursal.application.port.out.SucursalRepositoryPort;
 import com.levir.hernandez.sucursal.domain.model.Sucursal;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
 @ObservableUseCase
@@ -20,23 +21,27 @@ public class SucursalService implements
     private final SucursalRepositoryPort sucursalRepositoryPort;
 
     @Override
-    public Sucursal obtenerSucursal(UUID sucursalId)
+    public Mono<Sucursal> obtenerSucursal(UUID sucursalId)
     {
         return sucursalRepositoryPort.obtenerSucursalPorId(sucursalId)
-                .orElseThrow(() -> new SucursalNoEncontradaException(sucursalId));
+                .switchIfEmpty(Mono.error(() -> new SucursalNoEncontradaException(sucursalId)));
     }
 
     @Override
-    public List<Sucursal> obtenerSucursales(UUID franquiciaId)
+    public Flux<Sucursal> obtenerSucursales(UUID franquiciaId)
     {
         return sucursalRepositoryPort.obtenerSucursalesPorIdDeFranquicia(franquiciaId);
     }
 
     @Override
-    public Sucursal renombrarSucursal(UUID sucursalId, String nombre)
+    public Mono<Sucursal> renombrarSucursal(UUID sucursalId, String nombre)
     {
-        Sucursal sucursal = obtenerSucursal(sucursalId);
-        sucursal.renombrar(nombre);
-        return sucursalRepositoryPort.guardarSucursal(sucursal);
+        return obtenerSucursal(sucursalId)
+                .map(sucursal ->
+                {
+                    sucursal.renombrar(nombre);
+                    return sucursal;
+                })
+                .flatMap(sucursalRepositoryPort::guardarSucursal);
     }
 }
