@@ -1,4 +1,0 @@
-aws_region        = "us-east-1"
-environment       = "dev"
-api_image         = "<CUENTA>.dkr.ecr.us-east-1.amazonaws.com/franquicia:1.0.0"
-api_allowed_cidrs = ["0.0.0.0/0"]

@@ -1,0 +1,38 @@
+# Generado por Terraform. Los tres servicios y ActiveMQ en una t3.micro (1 GB).
+# Los limites de memoria estan medidos: con ellos el conjunto ocupa unos 800 MB.
+
+x-java: &java
+  JAVA_TOOL_OPTIONS: "-Xmx150m -Xss512k -XX:MaxMetaspaceSize=110m -XX:ReservedCodeCacheSize=32m -XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+  SERVER_PORT: "8080"
+  ACTIVEMQ_URL: tcp://activemq:61616
+  FRANQUICIA_URL: http://${host_publico}:${servicios.franquicia.puerto}
+  SUCURSAL_URL: http://${host_publico}:${servicios.sucursal.puerto}
+  PRODUCTO_URL: http://${host_publico}:${servicios.producto.puerto}
+
+services:
+  activemq:
+    image: apache/activemq-classic:6.1.7
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      ACTIVEMQ_OPTS_MEMORY: "-Xms64M -Xmx128M"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/61616'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+%{ for nombre, s in servicios }
+  ${nombre}-service:
+    image: ${imagenes[nombre]}
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      activemq:
+        condition: service_healthy
+    environment:
+      <<: *java
+      MONGO_URI: $${MONGO_URI_${upper(nombre)}}
+      DATOS_INICIALES_PATH: "${seed_enabled ? s.datos : ""}"
+    ports:
+      - "${s.puerto}:8080"
+%{ endfor ~}
