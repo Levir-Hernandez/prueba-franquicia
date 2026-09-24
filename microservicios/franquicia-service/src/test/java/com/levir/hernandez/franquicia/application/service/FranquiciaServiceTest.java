@@ -11,13 +11,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -36,21 +36,25 @@ class FranquiciaServiceTest
     @DisplayName("Deberia agregar una franquicia nueva")
     void agregaFranquicia()
     {
-        when(franquiciaRepository.guardarFranquicia(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(franquiciaRepository.guardarFranquicia(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        Franquicia creada = service.agregarFranquicia("Burger Express");
+        StepVerifier.create(service.agregarFranquicia("Burger Express").map(Franquicia::getNombre))
+                .expectNext("Burger Express")
+                .verifyComplete();
 
         ArgumentCaptor<Franquicia> captor = ArgumentCaptor.forClass(Franquicia.class);
         verify(franquiciaRepository).guardarFranquicia(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
-        assertThat(creada.getNombre()).isEqualTo("Burger Express");
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al agregar una franquicia con nombre invalido")
+    @DisplayName("Deberia emitir error y no guardar al agregar una franquicia con nombre invalido")
     void noAgregaFranquiciaConNombreInvalido()
     {
-        assertThatThrownBy(() -> service.agregarFranquicia("")).isInstanceOf(FranquiciaInvalidaException.class);
+        StepVerifier.create(service.agregarFranquicia(""))
+                .expectError(FranquiciaInvalidaException.class)
+                .verify();
+
         verify(franquiciaRepository, never()).guardarFranquicia(any());
     }
 
@@ -59,40 +63,44 @@ class FranquiciaServiceTest
     void obtieneFranquiciaExistente()
     {
         when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId))
-                .thenReturn(Optional.of(new Franquicia(franquiciaId, "Burger Express")));
+                .thenReturn(Mono.just(new Franquicia(franquiciaId, "Burger Express")));
 
-        assertThat(service.obtenerFranquicia(franquiciaId).getNombre()).isEqualTo("Burger Express");
+        StepVerifier.create(service.obtenerFranquicia(franquiciaId).map(Franquicia::getNombre))
+                .expectNext("Burger Express")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion al obtener una franquicia que no existe")
+    @DisplayName("Deberia emitir error al obtener una franquicia que no existe")
     void noObtieneFranquiciaInexistente()
     {
-        when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId)).thenReturn(Optional.empty());
+        when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.obtenerFranquicia(franquiciaId))
-                .isInstanceOf(FranquiciaNoEncontradaException.class);
+        StepVerifier.create(service.obtenerFranquicia(franquiciaId))
+                .expectError(FranquiciaNoEncontradaException.class)
+                .verify();
     }
 
     @Test
     @DisplayName("Deberia obtener todas las franquicias cuando hay franquicias")
     void obtieneFranquicias()
     {
-        when(franquiciaRepository.obtenerTodasLasFranquicias()).thenReturn(List.of(
+        when(franquiciaRepository.obtenerTodasLasFranquicias()).thenReturn(Flux.just(
                 new Franquicia(UUID.randomUUID(), "Burger Express"),
                 new Franquicia(UUID.randomUUID(), "Pizza Rapida")));
 
-        assertThat(service.obtenerFranquicias()).extracting(Franquicia::getNombre)
-                .containsExactlyInAnyOrder("Burger Express", "Pizza Rapida");
+        StepVerifier.create(service.obtenerFranquicias().map(Franquicia::getNombre))
+                .expectNext("Burger Express", "Pizza Rapida")
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia devolver una lista vacia cuando no hay franquicias")
+    @DisplayName("Deberia terminar vacio cuando no hay franquicias")
     void obtieneListaVaciaSinFranquicias()
     {
-        when(franquiciaRepository.obtenerTodasLasFranquicias()).thenReturn(List.of());
+        when(franquiciaRepository.obtenerTodasLasFranquicias()).thenReturn(Flux.empty());
 
-        assertThat(service.obtenerFranquicias()).isEmpty();
+        StepVerifier.create(service.obtenerFranquicias()).verifyComplete();
     }
 
     @Test
@@ -100,35 +108,42 @@ class FranquiciaServiceTest
     void renombraFranquicia()
     {
         when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId))
-                .thenReturn(Optional.of(new Franquicia(franquiciaId, "Burger Express")));
-        when(franquiciaRepository.guardarFranquicia(any())).thenAnswer(inv -> inv.getArgument(0));
+                .thenReturn(Mono.just(new Franquicia(franquiciaId, "Burger Express")));
+        when(franquiciaRepository.guardarFranquicia(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        Franquicia renombrada = service.renombrarFranquicia(franquiciaId, "Pizza Rapida");
-
-        assertThat(renombrada.getId()).isEqualTo(franquiciaId);
-        assertThat(renombrada.getNombre()).isEqualTo("Pizza Rapida");
+        StepVerifier.create(service.renombrarFranquicia(franquiciaId, "Pizza Rapida"))
+                .assertNext(renombrada ->
+                {
+                    assertThat(renombrada.getId()).isEqualTo(franquiciaId);
+                    assertThat(renombrada.getNombre()).isEqualTo("Pizza Rapida");
+                })
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al renombrar una franquicia que no existe")
+    @DisplayName("Deberia emitir error y no guardar al renombrar una franquicia que no existe")
     void noRenombraFranquiciaInexistente()
     {
-        when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId)).thenReturn(Optional.empty());
+        when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> service.renombrarFranquicia(franquiciaId, "Pizza Rapida"))
-                .isInstanceOf(FranquiciaNoEncontradaException.class);
+        StepVerifier.create(service.renombrarFranquicia(franquiciaId, "Pizza Rapida"))
+                .expectError(FranquiciaNoEncontradaException.class)
+                .verify();
+
         verify(franquiciaRepository, never()).guardarFranquicia(any());
     }
 
     @Test
-    @DisplayName("Deberia lanzar excepcion y no guardar al renombrar una franquicia con nombre invalido")
+    @DisplayName("Deberia emitir error y no guardar al renombrar una franquicia con nombre invalido")
     void noRenombraFranquiciaConNombreInvalido()
     {
         when(franquiciaRepository.obtenerFranquiciaPorId(franquiciaId))
-                .thenReturn(Optional.of(new Franquicia(franquiciaId, "Burger Express")));
+                .thenReturn(Mono.just(new Franquicia(franquiciaId, "Burger Express")));
 
-        assertThatThrownBy(() -> service.renombrarFranquicia(franquiciaId, ""))
-                .isInstanceOf(FranquiciaInvalidaException.class);
+        StepVerifier.create(service.renombrarFranquicia(franquiciaId, ""))
+                .expectError(FranquiciaInvalidaException.class)
+                .verify();
+
         verify(franquiciaRepository, never()).guardarFranquicia(any());
     }
 }

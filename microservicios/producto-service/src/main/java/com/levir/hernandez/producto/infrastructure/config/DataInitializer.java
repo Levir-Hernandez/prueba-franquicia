@@ -9,6 +9,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -39,14 +40,14 @@ public class DataInitializer
         if (path.isBlank()) return;
 
         // Solo se insertan los ids que aun no existen: no duplica ni sobrescribe cambios hechos por la API
-        List<ProductoJson> nuevos = leerArchivo().stream()
-                .filter(json -> productoRepository.obtenerProductoPorId(json.id()).isEmpty())
-                .toList();
-
-        nuevos.forEach(json -> productoRepository.guardarProducto(
-                new Producto(json.id(), json.nombre(), json.stock(), json.sucursalId())));
-
-        log.info("Datos iniciales cargados desde {}: {} productos nuevos", path, nuevos.size());
+        Flux.fromIterable(leerArchivo())
+                .filterWhen(json -> productoRepository.obtenerProductoPorId(json.id()).hasElement().map(existe -> !existe))
+                .concatMap(json -> productoRepository.guardarProducto(
+                        new Producto(json.id(), json.nombre(), json.stock(), json.sucursalId())))
+                .count()
+                .subscribe(
+                        nuevos -> log.info("Datos iniciales cargados desde {}: {} productos nuevos", path, nuevos),
+                        error -> log.warn("No se pudieron cargar los datos iniciales de {}: {}", path, error.toString()));
     }
 
     private List<ProductoJson> leerArchivo()

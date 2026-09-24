@@ -1,6 +1,12 @@
 spring:
   application:
     name: sucursal-service
+  main:
+    # Stack reactivo: WebFlux sobre Netty
+    web-application-type: reactive
+  reactor:
+    # Restaura el traceId del contexto de Reactor en el MDC en cada operador, para que aparezca en los logs
+    context-propagation: auto
   mongodb:
     uri: ${MONGO_URI:mongodb://localhost:27017/sucursales}
   data:

@@ -7,6 +7,7 @@ import com.levir.hernandez.sucursal.application.port.out.FranquiciaConsultaPort;
 import com.levir.hernandez.sucursal.application.port.out.SucursalRepositoryPort;
 import com.levir.hernandez.sucursal.domain.model.Sucursal;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -21,16 +22,13 @@ public class AgregarSucursalService implements AgregarSucursalUseCase
     private final FranquiciaConsultaPort franquiciaConsultaPort;
 
     @Override
-    public Sucursal agregarSucursal(UUID franquiciaId, String nombre)
+    public Mono<Sucursal> agregarSucursal(UUID franquiciaId, String nombre)
     {
         // Se validan las reglas del dominio antes de consultar a otro servicio
-        Sucursal sucursal = new Sucursal(nombre, franquiciaId);
-
-        if (!franquiciaConsultaPort.existeFranquicia(franquiciaId))
-        {
-            throw new FranquiciaNoEncontradaException(franquiciaId);
-        }
-
-        return sucursalRepositoryPort.guardarSucursal(sucursal);
+        return Mono.fromCallable(() -> new Sucursal(nombre, franquiciaId))
+                .flatMap(sucursal -> franquiciaConsultaPort.existeFranquicia(franquiciaId)
+                        .filter(Boolean::booleanValue)
+                        .switchIfEmpty(Mono.error(() -> new FranquiciaNoEncontradaException(franquiciaId)))
+                        .then(Mono.defer(() -> sucursalRepositoryPort.guardarSucursal(sucursal))));
     }
 }

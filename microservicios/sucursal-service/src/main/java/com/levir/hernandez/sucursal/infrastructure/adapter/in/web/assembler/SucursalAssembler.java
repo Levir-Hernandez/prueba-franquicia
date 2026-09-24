@@ -8,17 +8,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
-import org.springframework.hateoas.server.RepresentationModelAssembler;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+import static org.springframework.hateoas.server.reactive.WebFluxLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.reactive.WebFluxLinkBuilder.methodOn;
 
+/**
+ * En WebFlux los enlaces se construyen de forma asincrona a partir de la peticion en curso
+ */
 @Component
-public class SucursalAssembler implements RepresentationModelAssembler<Sucursal, EntityModel<SucursalResponse>>
+public class SucursalAssembler
 {
     // Los recursos de otros microservicios no son controladores locales: se enlazan por su URL publica
     private final String franquiciaUrl;
@@ -31,26 +34,32 @@ public class SucursalAssembler implements RepresentationModelAssembler<Sucursal,
         this.productoUrl = productoUrl;
     }
 
-    @Override
-    public EntityModel<SucursalResponse> toModel(Sucursal sucursal)
+    public Mono<EntityModel<SucursalResponse>> toModel(Sucursal sucursal)
     {
         UUID sucursalId = sucursal.getId();
         String productos = productoUrl + "/api/v1/sucursales/" + sucursalId + "/productos";
 
-        return EntityModel.of(DtoMapper.toResponse(sucursal),
-                linkTo(methodOn(SucursalController.class).obtener(sucursalId)).withSelfRel(),
-                franquicia(sucursal.getFranquiciaId()),
-                linkTo(methodOn(SucursalController.class).obtener(sucursalId)).withRel("obtener_sucursal"),
-                linkTo(methodOn(SucursalController.class).renombrar(sucursalId, null)).withRel("renombrar_sucursal"),
-                Link.of(productos, "listar_productos"),
-                Link.of(productos, "agregar_producto"));
+        return Flux.concat(
+                        linkTo(methodOn(SucursalController.class).obtener(sucursalId)).withSelfRel().toMono(),
+                        Mono.just(franquicia(sucursal.getFranquiciaId())),
+                        linkTo(methodOn(SucursalController.class).obtener(sucursalId))
+                                .withRel("obtener_sucursal").toMono(),
+                        linkTo(methodOn(SucursalController.class).renombrar(sucursalId, null))
+                                .withRel("renombrar_sucursal").toMono(),
+                        Mono.just(Link.of(productos, "listar_productos")),
+                        Mono.just(Link.of(productos, "agregar_producto")))
+                .collectList()
+                .map(links -> EntityModel.of(DtoMapper.toResponse(sucursal), links));
     }
 
-    public CollectionModel<EntityModel<SucursalResponse>> toCollectionModel(List<Sucursal> sucursales, UUID franquiciaId)
+    public Mono<CollectionModel<EntityModel<SucursalResponse>>> toCollectionModel(Flux<Sucursal> sucursales,
+                                                                                 UUID franquiciaId)
     {
-        return toCollectionModel(sucursales)
-                .add(linkTo(methodOn(SucursalController.class).listar(franquiciaId)).withSelfRel())
-                .add(franquicia(franquiciaId));
+        return sucursales.concatMap(this::toModel)
+                .collectList()
+                .zipWith(linkTo(methodOn(SucursalController.class).listar(franquiciaId)).withSelfRel().toMono())
+                .map(modelosYEnlace -> CollectionModel.of(modelosYEnlace.getT1(),
+                        modelosYEnlace.getT2(), franquicia(franquiciaId)));
     }
 
     private Link franquicia(UUID franquiciaId)

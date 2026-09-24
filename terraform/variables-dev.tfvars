@@ -7,7 +7,7 @@ environment = "dev"
 # Restringir a la IP publica del equipo de desarrollo.
 api_allowed_cidrs = ["0.0.0.0/0"]
 
-image_tag     = "2.0.0"
+image_tag     = "3.0.0"
 instance_type = "t3.micro"
 seed_enabled  = true
 

@@ -11,12 +11,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -42,34 +42,38 @@ class ObtenerProductosConMayorStockServiceTest
         Producto hamburguesa = new Producto(UUID.randomUUID(), "Hamburguesa clasica", 30, sucursalId);
         Producto papas = new Producto(UUID.randomUUID(), "Papas fritas", 30, sucursalId);
         when(sucursalConsulta.obtenerSucursalesDeFranquicia(franquiciaId))
-                .thenReturn(List.of(new SucursalResumen(sucursalId, "Burger Express Centro")));
+                .thenReturn(Flux.just(new SucursalResumen(sucursalId, "Burger Express Centro")));
         when(productoRepository.obtenerProductosConMayorStockPorIdsDeSucursal(Set.of(sucursalId)))
-                .thenReturn(List.of(hamburguesa, papas));
+                .thenReturn(Flux.just(hamburguesa, papas));
 
-        assertThat(service.obtenerProductosConMayorStock(franquiciaId)).containsExactly(
-                new ProductoConMayorStock(hamburguesa.getId(), "Hamburguesa clasica", 30, sucursalId, "Burger Express Centro"),
-                new ProductoConMayorStock(papas.getId(), "Papas fritas", 30, sucursalId, "Burger Express Centro"));
+        StepVerifier.create(service.obtenerProductosConMayorStock(franquiciaId))
+                .expectNext(new ProductoConMayorStock(hamburguesa.getId(), "Hamburguesa clasica", 30, sucursalId,
+                        "Burger Express Centro"))
+                .expectNext(new ProductoConMayorStock(papas.getId(), "Papas fritas", 30, sucursalId,
+                        "Burger Express Centro"))
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName("Deberia devolver una lista vacia sin consultar productos si la franquicia no tiene sucursales")
+    @DisplayName("Deberia terminar vacio sin consultar productos si la franquicia no tiene sucursales")
     void obtieneListaVaciaSinSucursales()
     {
-        // Tambien cubre el fallback del circuit breaker, que devuelve una lista vacia
-        when(sucursalConsulta.obtenerSucursalesDeFranquicia(franquiciaId)).thenReturn(List.of());
+        // Tambien cubre el fallback del circuit breaker, que termina vacio
+        when(sucursalConsulta.obtenerSucursalesDeFranquicia(franquiciaId)).thenReturn(Flux.empty());
 
-        assertThat(service.obtenerProductosConMayorStock(franquiciaId)).isEmpty();
+        StepVerifier.create(service.obtenerProductosConMayorStock(franquiciaId)).verifyComplete();
         verifyNoInteractions(productoRepository);
     }
 
     @Test
-    @DisplayName("Deberia devolver una lista vacia si las sucursales de la franquicia no tienen productos")
+    @DisplayName("Deberia terminar vacio si las sucursales de la franquicia no tienen productos")
     void obtieneListaVaciaSinProductos()
     {
         when(sucursalConsulta.obtenerSucursalesDeFranquicia(franquiciaId))
-                .thenReturn(List.of(new SucursalResumen(sucursalId, "Burger Express Centro")));
-        when(productoRepository.obtenerProductosConMayorStockPorIdsDeSucursal(Set.of(sucursalId))).thenReturn(List.of());
+                .thenReturn(Flux.just(new SucursalResumen(sucursalId, "Burger Express Centro")));
+        when(productoRepository.obtenerProductosConMayorStockPorIdsDeSucursal(Set.of(sucursalId)))
+                .thenReturn(Flux.empty());
 
-        assertThat(service.obtenerProductosConMayorStock(franquiciaId)).isEmpty();
+        StepVerifier.create(service.obtenerProductosConMayorStock(franquiciaId)).verifyComplete();
     }
 }

@@ -1,11 +1,10 @@
 package com.levir.hernandez.sucursal.infrastructure.adapter.out.persistence.repository;
 
 import com.levir.hernandez.sucursal.infrastructure.adapter.out.persistence.document.SucursalDocument;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
+import reactor.core.publisher.Flux;
 
-import java.util.List;
-
-public interface SucursalMongoRepository extends MongoRepository<SucursalDocument, String>
+public interface SucursalMongoRepository extends ReactiveMongoRepository<SucursalDocument, String>
 {
-    List<SucursalDocument> findByFranquiciaId(String franquiciaId);
+    Flux<SucursalDocument> findByFranquiciaId(String franquiciaId);
 }

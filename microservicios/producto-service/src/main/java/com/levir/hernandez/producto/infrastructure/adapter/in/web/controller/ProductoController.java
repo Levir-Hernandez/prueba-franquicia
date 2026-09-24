@@ -25,6 +25,7 @@ import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -66,15 +67,15 @@ public class ProductoController
     })
     @PostMapping("/sucursales/{sucursalId}/productos")
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<EntityModel<ProductoResponse>> agregar(
+    public Mono<ResponseEntity<EntityModel<ProductoResponse>>> agregar(
             @Parameter(description = "Id de la sucursal", required = true)
             @PathVariable UUID sucursalId,
 
             @Valid @RequestBody AgregarProductoRequest request)
     {
-        EntityModel<ProductoResponse> body = assembler.toModel(
-                agregarProducto.agregarProducto(sucursalId, request.nombre(), request.stock()));
-        return ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body);
+        return agregarProducto.agregarProducto(sucursalId, request.nombre(), request.stock())
+                .flatMap(assembler::toModel)
+                .map(body -> ResponseEntity.created(body.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(body));
     }
 
     // ObtenerProductosUseCase
@@ -91,7 +92,7 @@ public class ProductoController
     })
     @GetMapping("/sucursales/{sucursalId}/productos")
     @ResponseStatus(HttpStatus.OK)
-    public CollectionModel<EntityModel<ProductoResponse>> listar(
+    public Mono<CollectionModel<EntityModel<ProductoResponse>>> listar(
             @Parameter(description = "Id de la sucursal", required = true)
             @PathVariable UUID sucursalId)
     {
@@ -113,11 +114,11 @@ public class ProductoController
     })
     @GetMapping("/productos/{productoId}")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<ProductoResponse> obtener(
+    public Mono<EntityModel<ProductoResponse>> obtener(
             @Parameter(description = "Id del producto", required = true)
             @PathVariable UUID productoId)
     {
-        return assembler.toModel(obtenerProducto.obtenerProducto(productoId));
+        return obtenerProducto.obtenerProducto(productoId).flatMap(assembler::toModel);
     }
 
     // EliminarProductoUseCase
@@ -129,12 +130,12 @@ public class ProductoController
     })
     @DeleteMapping("/productos/{productoId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ResponseEntity<Void> eliminar(
+    public Mono<ResponseEntity<Void>> eliminar(
             @Parameter(description = "Id del producto", required = true)
             @PathVariable UUID productoId)
     {
-        eliminarProducto.eliminarProducto(productoId);
-        return ResponseEntity.noContent().build();
+        return eliminarProducto.eliminarProducto(productoId)
+                .then(Mono.fromSupplier(() -> ResponseEntity.noContent().<Void>build()));
     }
 
     // ModificarStockProductoUseCase
@@ -158,13 +159,13 @@ public class ProductoController
     })
     @PatchMapping("/productos/{productoId}/stock")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<ProductoResponse> modificarStock(
+    public Mono<EntityModel<ProductoResponse>> modificarStock(
             @Parameter(description = "Id del producto", required = true)
             @PathVariable UUID productoId,
 
             @Valid @RequestBody ModificarStockRequest request)
     {
-        return assembler.toModel(modificarStockProducto.modificarStockProducto(productoId, request.stock()));
+        return modificarStockProducto.modificarStockProducto(productoId, request.stock()).flatMap(assembler::toModel);
     }
 
     // RenombrarProductoUseCase
@@ -188,13 +189,13 @@ public class ProductoController
     })
     @PatchMapping("/productos/{productoId}/nombre")
     @ResponseStatus(HttpStatus.OK)
-    public EntityModel<ProductoResponse> renombrar(
+    public Mono<EntityModel<ProductoResponse>> renombrar(
             @Parameter(description = "Id del producto", required = true)
             @PathVariable UUID productoId,
 
             @Valid @RequestBody NombreRecursoRequest request)
     {
-        return assembler.toModel(renombrarProducto.renombrarProducto(productoId, request.nombre()));
+        return renombrarProducto.renombrarProducto(productoId, request.nombre()).flatMap(assembler::toModel);
     }
 
     // ObtenerProductosConMayorStockUseCase
@@ -211,7 +212,7 @@ public class ProductoController
     })
     @GetMapping("/franquicias/{franquiciaId}/productos/mayor-stock")
     @ResponseStatus(HttpStatus.OK)
-    public CollectionModel<EntityModel<ProductoConMayorStockResponse>> obtenerConMayorStock(
+    public Mono<CollectionModel<EntityModel<ProductoConMayorStockResponse>>> obtenerConMayorStock(
             @Parameter(description = "Id de la franquicia", required = true)
             @PathVariable UUID franquiciaId)
     {

@@ -1,8 +1,11 @@
 # Arquitectura
 
-El monolito se ha separado en tres microservicios: franquicia, sucursal y producto.
-Cada uno mantiene la arquitectura hexagonal y tiene su propia base MongoDB.
-Se comunican por ActiveMQ con request-reply (sin replicar datos) protegido por un circuit breaker.
+Con la arquitectura de microservicios ya establecida (franquicia, sucursal y producto, cada uno hexagonal,
+con su propia base MongoDB y comunicados por ActiveMQ con request-reply y circuit breaker), el siguiente paso
+es volverlos reactivos de punta a punta: WebFlux sobre Netty, MongoDB Reactive y casos de uso que devuelven
+`Mono` / `Flux`, de modo que ninguna capa bloquee el event loop.
+
+La separación en servicios, las colas y la infraestructura se mantienen igual que en R2.
 
 ```
 franquicia-service :8081  ◄── pregunta ──  sucursal-service :8082  ◄── pregunta ──  producto-service :8083
@@ -15,18 +18,19 @@ franquicia-service :8081  ◄── pregunta ──  sucursal-service :8082  ◄
 | Área | Tecnología |
 |---|---|
 | Lenguaje y framework | Java 21, Spring Boot 4.1, Maven multi-módulo |
-| API | Spring MVC, Spring HATEOAS, Bean Validation, springdoc OpenAPI (Swagger) |
-| Persistencia | Spring Data MongoDB (una base por servicio) |
-| Mensajería | ActiveMQ Classic, JMS request-reply (`JmsTemplate.sendAndReceive`) |
-| Resiliencia | Resilience4j (circuit breaker + timeout), Spring Boot Actuator |
-| Transversal | AspectJ (trazas de casos de uso), `X-Trace-Id` propagado por JMS, Lombok |
+| API | Spring WebFlux (Netty), Spring HATEOAS, Bean Validation, springdoc OpenAPI (Swagger) |
+| Persistencia | Spring Data MongoDB Reactive, agregaciones con `ReactiveMongoTemplate` (una base por servicio) |
+| Mensajería | ActiveMQ Classic, JMS request-reply (`JmsTemplate.sendAndReceive` en el scheduler `boundedElastic`) |
+| Resiliencia | Resilience4j Reactor (circuit breaker + timeout), Spring Boot Actuator |
+| Transversal | Reactor context-propagation (`X-Trace-Id` en el MDC y por JMS), AspectJ, Lombok |
+| Pruebas | JUnit 5, Mockito, `reactor-test` (StepVerifier), `@WebFluxTest` |
 | Contenedores | Docker (una imagen por servicio), Docker Compose |
 | Nube | Terraform, AWS: EC2, ECR, Parameter Store, IAM, SSM, más MongoDB Atlas M0 |
 
 ## Carpetas
 
 ```
-R2/
+R3/
 ├── microservicios/               proyecto Maven (pom padre con los tres módulos)
 │   ├── franquicia-service/
 │   ├── sucursal-service/
@@ -38,12 +42,12 @@ R2/
 │           │   ├── port/out/             repositorio y consultas a otros servicios
 │           │   └── service/              implementación de los casos de uso
 │           └── infrastructure/
-│               ├── adapter/in/web/           controladores, DTOs, HATEOAS, errores
+│               ├── adapter/in/web/           controladores WebFlux, DTOs, HATEOAS, errores
 │               ├── adapter/in/messaging/     listeners JMS que responden a otros servicios
-│               ├── adapter/out/persistence/  documentos y repositorios Mongo
+│               ├── adapter/out/persistence/  ReactiveMongoRepository y agregaciones
 │               ├── adapter/out/messaging/    consultas JMS con timeout y circuit breaker
 │               ├── config/               beans, OpenAPI y datos iniciales
-│               └── observability/        traceId y logging de casos de uso
+│               └── observability/        WebFilter de traceId (contexto Reactor) y logging de casos de uso
 ├── terraform/                    infraestructura en AWS + Atlas (capa gratuita)
 │   └── templates/                arranque de la EC2 y docker compose que ejecuta
 ├── docker-compose.yml            entorno local: 3 servicios + 3 Mongo + ActiveMQ

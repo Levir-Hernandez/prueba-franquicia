@@ -1,15 +1,16 @@
 package com.levir.hernandez.sucursal.application.port.out;
 
 import com.levir.hernandez.sucursal.domain.model.Sucursal;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface SucursalRepositoryPort
 {
-    Sucursal guardarSucursal(Sucursal sucursal);
-    Optional<Sucursal> obtenerSucursalPorId(UUID sucursalId);
+    Mono<Sucursal> guardarSucursal(Sucursal sucursal);
+    /** Vacio si la sucursal no existe. */
+    Mono<Sucursal> obtenerSucursalPorId(UUID sucursalId);
 
-    List<Sucursal> obtenerSucursalesPorIdDeFranquicia(UUID franquiciaId);
+    Flux<Sucursal> obtenerSucursalesPorIdDeFranquicia(UUID franquiciaId);
 }
