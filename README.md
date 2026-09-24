@@ -2,6 +2,7 @@
 
 API REST para gestionar franquicias, sucursales y productos, separada en tres microservicios
 (cada uno con su propia base MongoDB) que se comunican por ActiveMQ.
+Son reactivos de punta a punta: Spring WebFlux, MongoDB Reactive y casos de uso con `Mono` / `Flux`.
 
 ## Ejecutar en local
 
@@ -81,8 +82,8 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 
 docker compose build
 for s in franquicia sucursal producto; do
-  docker tag microservicios-$s-service $REGISTRO/franchise-free/$s-service:2.0.0
-  docker push $REGISTRO/franchise-free/$s-service:2.0.0
+  docker tag microservicios-$s-service $REGISTRO/franchise-free/$s-service:3.0.0
+  docker push $REGISTRO/franchise-free/$s-service:3.0.0
 done
 ```
 
